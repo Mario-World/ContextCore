@@ -1,36 +1,62 @@
 steps:
-  # 1. Build Backend Image
+  # 1. Build and Deploy Backend to Cloud Run
   - name: 'gcr.io/cloud-builders/docker'
+    id: 'build-backend'
     args:
       - 'build'
-      - '-t'
-      - 'asia-south1-docker.pkg.dev/$PROJECT_ID/contextcore/backend:$COMMIT_SHA'
       - '-t'
       - 'asia-south1-docker.pkg.dev/$PROJECT_ID/contextcore/backend:latest'
       - './backend'
 
-  # 2. Push Image to Artifact Registry
   - name: 'gcr.io/cloud-builders/docker'
+    id: 'push-backend'
     args:
       - 'push'
-      - '--all-tags'
-      - 'asia-south1-docker.pkg.dev/$PROJECT_ID/contextcore/backend'
+      - 'asia-south1-docker.pkg.dev/$PROJECT_ID/contextcore/backend:latest'
 
-  # 3. Deploy to Cloud Run
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'deploy-backend'
     entrypoint: gcloud
     args:
       - 'run'
       - 'deploy'
-      - 'contextcore'
+      - 'contextcore-backend'
       - '--image=asia-south1-docker.pkg.dev/$PROJECT_ID/contextcore/backend:latest'
       - '--region=asia-south1'
       - '--platform=managed'
       - '--allow-unauthenticated'
       - '--set-env-vars=GOOGLE_CLOUD_PROJECT=$PROJECT_ID,GOOGLE_CLOUD_LOCATION=asia-south1'
 
+  # 2. Build and Deploy Frontend to Cloud Run
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'build-frontend'
+    args:
+      - 'build'
+      - '-t'
+      - 'asia-south1-docker.pkg.dev/$PROJECT_ID/contextcore/frontend:latest'
+      - './frontend'
+
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'push-frontend'
+    args:
+      - 'push'
+      - 'asia-south1-docker.pkg.dev/$PROJECT_ID/contextcore/frontend:latest'
+
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'deploy-frontend'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'contextcore-frontend'
+      - '--image=asia-south1-docker.pkg.dev/$PROJECT_ID/contextcore/frontend:latest'
+      - '--region=asia-south1'
+      - '--platform=managed'
+      - '--allow-unauthenticated'
+
 images:
   - 'asia-south1-docker.pkg.dev/$PROJECT_ID/contextcore/backend:latest'
+  - 'asia-south1-docker.pkg.dev/$PROJECT_ID/contextcore/frontend:latest'
 
 options:
   logging: CLOUD_LOGGING_ONLY

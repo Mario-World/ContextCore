@@ -120,13 +120,16 @@ echo "NEXT_PUBLIC_API_URL=http://localhost:8000" > .env.local
 npm run dev
 ```
 
-### 4. Deploy
+### 4. Deploy to Google Cloud Run
 ```bash
 gcloud run deploy contextcore-backend --source ./backend --region asia-south1 --allow-unauthenticated
 gcloud run deploy contextcore-frontend --source ./frontend --region asia-south1 --allow-unauthenticated
 ```
 
----
+#### 🌐 Live Google Cloud Run Deployment
+![Google Cloud Run Overview](docs/images/gcloud-run-deployment.png)
+
+Both `contextcore-backend` and `contextcore-frontend` are running live on Google Cloud Run (`asia-south1`).
 
 
 
