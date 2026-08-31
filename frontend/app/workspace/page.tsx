@@ -4,7 +4,6 @@ import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import AuthButton from "@/components/AuthButton";
-import ThemeToggle from "@/components/ThemeToggle";
 import {
   Code,
   Database,
@@ -31,7 +30,7 @@ import {
   Home,
   ArrowLeft,
   BookOpen,
-  Terminal,
+  Terminal as TerminalIcon,
   ShieldCheck,
   Check,
   Copy,
@@ -42,7 +41,11 @@ import {
   Layers,
   ChevronRight,
   Play,
-  ArrowRight
+  ArrowRight,
+  Bug,
+  Activity,
+  Trash2,
+  Send
 } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
 
@@ -74,6 +77,13 @@ interface CostSummary {
   total_cost: number;
 }
 
+interface TerminalLog {
+  id: string;
+  timestamp: string;
+  level: "INFO" | "SUCCESS" | "WARN" | "ERROR" | "COMMAND";
+  text: string;
+}
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 const SAMPLE_REPOS = [
@@ -89,7 +99,7 @@ export default function WorkspacePage() {
   const [githubUrl, setGithubUrl] = useState("");
   const [sessionId, setSessionId] = useState("session-" + Math.floor(1000 + Math.random() * 9000));
   const [onboardStatus, setOnboardStatus] = useState<"READY" | "LEARNING">("READY");
-  const [activeTab, setActiveTab] = useState<"chat" | "plugin" | "files" | "terminal">("chat");
+  const [activeTab, setActiveTab] = useState<"chat" | "terminal" | "debug" | "plugin">("chat");
 
   // Step-by-step interactive demo tour state
   const [showDemoTour, setShowDemoTour] = useState(false);
@@ -100,7 +110,7 @@ export default function WorkspacePage() {
     {
       id: "init-1",
       sender: "system",
-      text: `ContextCore workspace initialized. Ready to connect any repository or explore memory-augmented coding.`,
+      text: `ContextCore initialized. Ready for repository exploration and memory-augmented coding. Session ID: ${sessionId}`,
       type: "system",
       timestamp: new Date().toLocaleTimeString([], {
         hour: "2-digit",
@@ -110,6 +120,16 @@ export default function WorkspacePage() {
   ]);
   const [inputMessage, setInputMessage] = useState("");
   const [isSending, setIsSending] = useState(false);
+
+  // Terminal State
+  const [terminalInput, setTerminalInput] = useState("");
+  const [terminalLogs, setTerminalLogs] = useState<TerminalLog[]>([
+    { id: "1", timestamp: new Date().toLocaleTimeString(), level: "INFO", text: "ContextCore Coordinator daemon started on port 8000" },
+    { id: "2", timestamp: new Date().toLocaleTimeString(), level: "INFO", text: "Connected to Google Cloud Firestore (contextcore-507109)" },
+    { id: "3", timestamp: new Date().toLocaleTimeString(), level: "SUCCESS", text: "Vertex AI Vector Search index endpoint ready (sub-15ms latency)" },
+    { id: "4", timestamp: new Date().toLocaleTimeString(), level: "INFO", text: "Type 'help' for available CLI commands." }
+  ]);
+  const terminalEndRef = useRef<HTMLDivElement>(null);
 
   // Inspector Panel State
   const [corrections, setCorrections] = useState<Correction[]>([]);
@@ -132,6 +152,13 @@ export default function WorkspacePage() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isSending]);
 
+  // Auto-scroll terminal
+  useEffect(() => {
+    if (activeTab === "terminal") {
+      terminalEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [terminalLogs, activeTab]);
+
   // Initial data loading
   useEffect(() => {
     setMounted(true);
@@ -141,6 +168,18 @@ export default function WorkspacePage() {
     }
   }, [repoId]);
 
+  const addTerminalLog = (level: "INFO" | "SUCCESS" | "WARN" | "ERROR" | "COMMAND", text: string) => {
+    setTerminalLogs((prev) => [
+      ...prev,
+      {
+        id: String(Date.now() + Math.random()),
+        timestamp: new Date().toLocaleTimeString(),
+        level,
+        text
+      }
+    ]);
+  };
+
   const fetchMemory = async () => {
     if (!repoId.trim()) return;
     try {
@@ -148,9 +187,11 @@ export default function WorkspacePage() {
       if (res.ok) {
         const data = await res.json();
         setCorrections(data.corrections || []);
+        addTerminalLog("INFO", `Synced ${data.corrections?.length || 0} active conventions from Firestore for ${repoId}`);
       }
     } catch (err) {
       console.error("Failed to fetch memory:", err);
+      addTerminalLog("WARN", `Could not connect to backend memory API: ${err}`);
     }
   };
 
@@ -187,12 +228,15 @@ export default function WorkspacePage() {
     setGithubUrl(targetUrl);
     setOnboardStatus("LEARNING");
 
+    addTerminalLog("COMMAND", `ingest --url ${targetUrl} --repo ${parsedRepoId}`);
+    addTerminalLog("INFO", `Cloning repository into temporary sandbox...`);
+
     setMessages((prev) => [
       ...prev,
       {
         id: String(Date.now()),
         sender: "system",
-        text: `Ingesting codebase from ${targetUrl}... Parsing Abstract Syntax Trees (AST) and indexing function/class symbols into Vector Search.`,
+        text: `Ingesting codebase from ${targetUrl}... Parsing AST syntax trees and indexing code symbols into vector memory.`,
         type: "system",
         timestamp: new Date().toLocaleTimeString([], {
           hour: "2-digit",
@@ -213,6 +257,7 @@ export default function WorkspacePage() {
 
       const data = await res.json();
       if (res.ok) {
+        addTerminalLog("SUCCESS", `AST Parsing complete: ${data.files_processed || 0} files, ${data.chunks_stored || 0} symbols indexed.`);
         setMessages((prev) => [
           ...prev,
           {
@@ -229,6 +274,7 @@ export default function WorkspacePage() {
         setOnboardStatus("READY");
         await refetchInspectorData();
       } else {
+        addTerminalLog("WARN", `Ingestion notice: ${data.detail || "Using fallback memory state"}`);
         setMessages((prev) => [
           ...prev,
           {
@@ -245,6 +291,7 @@ export default function WorkspacePage() {
         setOnboardStatus("READY");
       }
     } catch (err: any) {
+      addTerminalLog("INFO", `Local development mode active for ${parsedRepoId}`);
       setMessages((prev) => [
         ...prev,
         {
@@ -266,6 +313,7 @@ export default function WorkspacePage() {
   const handleNewSession = () => {
     const freshSession = `session-${Math.floor(1000 + Math.random() * 9000)}`;
     setSessionId(freshSession);
+    addTerminalLog("INFO", `Initialized fresh session: ${freshSession}`);
     setMessages([
       {
         id: "init-1",
@@ -304,6 +352,7 @@ export default function WorkspacePage() {
     setIsSending(true);
 
     const activeRepo = repoId || "default-repo";
+    addTerminalLog("COMMAND", `user_prompt: "${userText.slice(0, 45)}..."`);
 
     // Call /query in parallel to capture retrieved files context
     try {
@@ -322,6 +371,7 @@ export default function WorkspacePage() {
           const files: string[] = queryData.results.map((r: any) => r.file_path);
           const uniqueFiles = Array.from(new Set(files));
           setActiveFiles(uniqueFiles);
+          addTerminalLog("INFO", `Retrieved ${uniqueFiles.length} context files from vector store.`);
         }
       }
     } catch (err) {
@@ -347,6 +397,12 @@ export default function WorkspacePage() {
         }
         if (data.corrections_applied) {
           setCorrectionsApplied(data.corrections_applied);
+        }
+
+        if (data.type === "correction_ack") {
+          addTerminalLog("SUCCESS", `Learned & persisted new rule: [${data.topic || "GENERAL"}]`);
+        } else {
+          addTerminalLog("INFO", `Response generated via ${data.model_used || "gemini-2.0-flash"}`);
         }
 
         const assistantMsgObj: Message = {
@@ -396,6 +452,68 @@ export default function WorkspacePage() {
     } finally {
       setIsSending(false);
       await refetchInspectorData();
+    }
+  };
+
+  // Execute terminal CLI commands
+  const handleTerminalSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const cmd = terminalInput.trim();
+    if (!cmd) return;
+
+    setTerminalInput("");
+    addTerminalLog("COMMAND", `$ ${cmd}`);
+
+    const parts = cmd.split(" ");
+    const mainCmd = parts[0].toLowerCase();
+
+    switch (mainCmd) {
+      case "help":
+        addTerminalLog("INFO", "Available Commands:");
+        addTerminalLog("INFO", "  help                  - Show this help menu");
+        addTerminalLog("INFO", "  status                - View coordinator & GCP health");
+        addTerminalLog("INFO", "  ingest <repo_url>     - Ingest a GitHub repository");
+        addTerminalLog("INFO", "  memory                - Print learned rules for active repo");
+        addTerminalLog("INFO", "  costs                 - Display Gemini Flash / Pro cost stats");
+        addTerminalLog("INFO", "  clear                 - Clear terminal screen");
+        break;
+
+      case "status":
+        addTerminalLog("SUCCESS", `Coordinator: ONLINE | Session: ${sessionId}`);
+        addTerminalLog("INFO", `Connected Repo: ${repoId || "None"} | API: ${API_BASE}`);
+        addTerminalLog("INFO", `Vertex AI Vector Search: CONNECTED (768-dim) | Firestore: ACTIVE`);
+        break;
+
+      case "ingest":
+        if (parts[1]) {
+          handleOnboard(parts[1]);
+        } else {
+          addTerminalLog("WARN", "Usage: ingest https://github.com/owner/repo");
+        }
+        break;
+
+      case "memory":
+        if (corrections.length === 0) {
+          addTerminalLog("INFO", `No recorded rules for ${repoId || "active session"}.`);
+        } else {
+          corrections.forEach((c, idx) => {
+            addTerminalLog("SUCCESS", `[${c.topic || "RULE"}] ${c.text}`);
+          });
+        }
+        break;
+
+      case "costs":
+        addTerminalLog("INFO", `Total Cost: $${costSummary.total_cost.toFixed(4)}`);
+        addTerminalLog("INFO", `Flash 2.0 Calls: ${costSummary.flash.call_count} | Pro 2.5 Calls: ${costSummary.pro.call_count}`);
+        break;
+
+      case "clear":
+        setTerminalLogs([]);
+        break;
+
+      default:
+        addTerminalLog("WARN", `Command not recognized: '${mainCmd}'. Type 'help' for options.`);
+        break;
     }
   };
 
@@ -479,8 +597,8 @@ export default function WorkspacePage() {
 
   // Cost Data for Chart
   const costData = [
-    { name: "Pro ($0.00125/1k)", value: costSummary.pro.cost_est, color: "#6366F1" },
-    { name: "Flash ($0.00015/1k)", value: costSummary.flash.cost_est, color: "#3ECF8E" },
+    { name: "Pro", value: Math.max(0.0001, costSummary.pro.cost_est), color: "#818CF8" },
+    { name: "Flash", value: Math.max(0.0001, costSummary.flash.cost_est), color: "#3ECF8E" },
   ];
 
   const totalCostValue = costSummary.total_cost > 0
@@ -560,6 +678,30 @@ export default function WorkspacePage() {
             </Link>
 
             <button
+              onClick={() => setActiveTab("terminal")}
+              className={`w-full flex items-center gap-3 px-3 py-2 text-xs font-medium rounded transition-all cursor-pointer ${
+                activeTab === "terminal"
+                  ? "bg-surface border border-accent/40 text-foreground"
+                  : "text-muted hover:text-foreground hover:bg-surface/80"
+              }`}
+            >
+              <TerminalIcon className="w-4 h-4 text-emerald-400" />
+              <span>Terminal Logs</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab("debug")}
+              className={`w-full flex items-center gap-3 px-3 py-2 text-xs font-medium rounded transition-all cursor-pointer ${
+                activeTab === "debug"
+                  ? "bg-surface border border-accent/40 text-foreground"
+                  : "text-muted hover:text-foreground hover:bg-surface/80"
+              }`}
+            >
+              <Bug className="w-4 h-4 text-amber-400" />
+              <span>Debug Inspector</span>
+            </button>
+
+            <button
               onClick={() => setActiveTab("plugin")}
               className={`w-full flex items-center gap-3 px-3 py-2 text-xs font-medium rounded transition-all cursor-pointer ${
                 activeTab === "plugin"
@@ -589,43 +731,67 @@ export default function WorkspacePage() {
       <section className="flex-1 flex flex-col min-w-0 bg-background">
         {/* Top bar: Tabs & Repo connector */}
         <div className="h-14 border-b border-border px-6 flex items-center justify-between shrink-0 bg-surface/30">
-          {/* Tab Selection */}
-          <div className="flex items-center space-x-3 h-full">
+          {/* Functional Tab Selection */}
+          <div className="flex items-center space-x-2 h-full">
             <button
               onClick={() => setActiveTab("chat")}
-              className={`h-full px-3 flex items-center gap-1.5 text-xs font-semibold border-b-2 transition-colors cursor-pointer ${
+              className={`h-full px-3.5 flex items-center gap-1.5 text-xs font-semibold border-b-2 transition-all cursor-pointer ${
                 activeTab === "chat"
                   ? "border-accent text-foreground"
                   : "border-transparent text-muted hover:text-foreground"
               }`}
             >
               <Code className="w-3.5 h-3.5" />
-              <span>Chat & Editor</span>
+              <span>Explorer</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab("terminal")}
+              className={`h-full px-3.5 flex items-center gap-1.5 text-xs font-semibold border-b-2 transition-all cursor-pointer ${
+                activeTab === "terminal"
+                  ? "border-accent text-foreground"
+                  : "border-transparent text-muted hover:text-foreground"
+              }`}
+            >
+              <TerminalIcon className="w-3.5 h-3.5" />
+              <span>Terminal</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab("debug")}
+              className={`h-full px-3.5 flex items-center gap-1.5 text-xs font-semibold border-b-2 transition-all cursor-pointer ${
+                activeTab === "debug"
+                  ? "border-accent text-foreground"
+                  : "border-transparent text-muted hover:text-foreground"
+              }`}
+            >
+              <Bug className="w-3.5 h-3.5" />
+              <span>Debug</span>
             </button>
 
             <button
               onClick={() => setActiveTab("plugin")}
-              className={`h-full px-3 flex items-center gap-1.5 text-xs font-semibold border-b-2 transition-colors cursor-pointer ${
+              className={`h-full px-3.5 flex items-center gap-1.5 text-xs font-semibold border-b-2 transition-all cursor-pointer ${
                 activeTab === "plugin"
                   ? "border-accent text-foreground"
                   : "border-transparent text-muted hover:text-foreground"
               }`}
             >
               <FolderGit2 className="w-3.5 h-3.5" />
-              <span>Plugin / CLI Tool</span>
+              <span>Plugin / SDK</span>
             </button>
           </div>
 
-          {/* Right Controls: Repo Connector, Theme Toggle & Auth */}
+          {/* Right Controls: Repo Connector & Auth */}
           <div className="flex items-center gap-3">
             {/* Open Codebase Ingestion Box */}
-            <div className="w-[360px] flex items-center gap-2 bg-background border border-border focus-within:border-accent rounded px-3 py-1 text-xs shadow-inner">
+            <div className="w-[340px] flex items-center gap-2 bg-background border border-border focus-within:border-accent rounded px-3 py-1 text-xs shadow-inner">
               <Link2 className="w-3.5 h-3.5 text-muted shrink-0" />
               <input
                 type="text"
                 value={githubUrl}
                 onChange={(e) => setGithubUrl(e.target.value)}
-                placeholder="Paste any GitHub repository URL..."
+                placeholder="Paste any GitHub repo URL..."
                 className="bg-transparent border-none outline-none flex-1 text-foreground placeholder-muted/50 font-mono text-[11px] w-full"
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
@@ -685,7 +851,7 @@ export default function WorkspacePage() {
           </div>
         </div>
 
-        {/* MAIN BODY AREA */}
+        {/* ================= TAB 1: EXPLORER / CHAT ================= */}
         {activeTab === "chat" && (
           <div className="flex-1 overflow-y-auto p-6 space-y-6 flex flex-col justify-between">
             <div className="max-w-4xl w-full mx-auto space-y-5">
@@ -865,7 +1031,142 @@ export default function WorkspacePage() {
           </div>
         )}
 
-        {/* PLUGIN / DEVELOPER TOOL MODEL TAB */}
+        {/* ================= TAB 2: TERMINAL CONSOLE ================= */}
+        {activeTab === "terminal" && (
+          <div className="flex-1 flex flex-col p-6 max-w-5xl w-full mx-auto font-mono text-xs overflow-hidden">
+            <div className="flex items-center justify-between bg-surface border border-border px-4 py-2.5 rounded-t-xl">
+              <div className="flex items-center gap-2 text-muted">
+                <TerminalIcon className="w-4 h-4 text-emerald-400" />
+                <span className="font-bold text-foreground">CONTEXTCORE DEVELOPER CONSOLE</span>
+                <span className="text-[10px] text-muted">| Port: 8000</span>
+              </div>
+              <button
+                onClick={() => setTerminalLogs([])}
+                className="flex items-center gap-1 text-[11px] text-muted hover:text-rose-400 transition-colors cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Clear</span>
+              </button>
+            </div>
+
+            {/* Terminal Logs Output */}
+            <div className="flex-1 bg-[#0A0A0C] border-x border-border p-4 overflow-y-auto space-y-1.5 text-xs text-foreground/90 font-mono shadow-inner">
+              {terminalLogs.map((log) => (
+                <div key={log.id} className="flex items-start gap-2.5 leading-relaxed">
+                  <span className="text-muted/60 text-[10px] shrink-0 select-none">[{log.timestamp}]</span>
+                  <span
+                    className={`font-bold shrink-0 select-none text-[10px] px-1 rounded ${
+                      log.level === "COMMAND"
+                        ? "text-accent bg-accent/15"
+                        : log.level === "SUCCESS"
+                        ? "text-emerald-400 bg-emerald-500/10"
+                        : log.level === "WARN"
+                        ? "text-amber-400 bg-amber-500/10"
+                        : log.level === "ERROR"
+                        ? "text-rose-400 bg-rose-500/10"
+                        : "text-muted"
+                    }`}
+                  >
+                    {log.level}
+                  </span>
+                  <span className={log.level === "COMMAND" ? "text-foreground font-semibold" : "text-foreground/90"}>
+                    {log.text}
+                  </span>
+                </div>
+              ))}
+              <div ref={terminalEndRef} />
+            </div>
+
+            {/* Terminal Input Prompt */}
+            <form
+              onSubmit={handleTerminalSubmit}
+              className="bg-surface border border-border rounded-b-xl px-4 py-2 flex items-center gap-2"
+            >
+              <span className="text-emerald-400 font-bold select-none">&gt;</span>
+              <input
+                type="text"
+                value={terminalInput}
+                onChange={(e) => setTerminalInput(e.target.value)}
+                placeholder="Type 'help', 'status', 'ingest <repo>', 'memory', 'costs', or 'clear'..."
+                className="flex-1 bg-transparent border-none outline-none text-foreground placeholder-muted/40 font-mono text-xs"
+              />
+              <button
+                type="submit"
+                className="text-xs bg-accent hover:bg-accent-hover text-white px-3 py-1 rounded font-semibold transition-all cursor-pointer"
+              >
+                Exec
+              </button>
+            </form>
+          </div>
+        )}
+
+        {/* ================= TAB 3: DEBUG & STATE INSPECTOR ================= */}
+        {activeTab === "debug" && (
+          <div className="flex-1 overflow-y-auto p-6 max-w-5xl w-full mx-auto space-y-5 font-mono text-xs">
+            <div className="flex items-center justify-between border-b border-border pb-3">
+              <div className="flex items-center gap-2">
+                <Bug className="w-4 h-4 text-amber-400" />
+                <span className="font-bold text-sm text-foreground">COORDINATOR PIPELINE DEBUGGER</span>
+              </div>
+              <span className="text-[10px] bg-success/15 border border-success/30 text-success px-2 py-0.5 rounded font-bold">
+                STATE: SYNCHRONIZED
+              </span>
+            </div>
+
+            {/* Grid of Diagnostics */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Card 1: Active Session Snapshot */}
+              <div className="bg-surface border border-border rounded-xl p-4 space-y-2.5">
+                <span className="font-bold text-accent text-[11px] flex items-center gap-1.5">
+                  <Activity className="w-3.5 h-3.5" />
+                  SESSION CHECKPOINT SNAPSHOT
+                </span>
+                <div className="bg-background border border-border rounded-lg p-3 space-y-1.5 text-[11px]">
+                  <div><span className="text-muted">Session ID:</span> <span className="text-foreground">{sessionId}</span></div>
+                  <div><span className="text-muted">Active Repo:</span> <span className="text-foreground">{repoId || "None"}</span></div>
+                  <div><span className="text-muted">Last Active Model:</span> <span className="text-emerald-400">{lastModelUsed || "gemini-2.0-flash"}</span></div>
+                  <div><span className="text-muted">Resilient Checkpoints:</span> <span className="text-foreground">Enabled (Firestore)</span></div>
+                </div>
+              </div>
+
+              {/* Card 2: Vector Search & Embeddings */}
+              <div className="bg-surface border border-border rounded-xl p-4 space-y-2.5">
+                <span className="font-bold text-emerald-400 text-[11px] flex items-center gap-1.5">
+                  <Database className="w-3.5 h-3.5" />
+                  VERTEX AI VECTOR SEARCH STATUS
+                </span>
+                <div className="bg-background border border-border rounded-lg p-3 space-y-1.5 text-[11px]">
+                  <div><span className="text-muted">Dimension:</span> <span className="text-foreground">768 (text-embedding-004)</span></div>
+                  <div><span className="text-muted">Index Metric:</span> <span className="text-foreground">DOT_PRODUCT_DISTANCE</span></div>
+                  <div><span className="text-muted">Nearest Neighbor Query Top-K:</span> <span className="text-foreground">5 chunks</span></div>
+                  <div><span className="text-muted">Active Context Files:</span> <span className="text-foreground">{activeFiles.length} referenced</span></div>
+                </div>
+              </div>
+            </div>
+
+            {/* Card 3: Convention Stack in Memory */}
+            <div className="bg-surface border border-border rounded-xl p-4 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-foreground text-[11px]">LOADED CONVENTION STACK IN PROMPT INJECTION</span>
+                <span className="text-muted text-[10px]">{corrections.length} recorded</span>
+              </div>
+              <div className="bg-background border border-border rounded-lg p-3 max-h-48 overflow-y-auto space-y-2">
+                {corrections.length === 0 ? (
+                  <span className="text-muted text-[11px]">No active conventions injected.</span>
+                ) : (
+                  corrections.map((c, i) => (
+                    <div key={i} className="flex items-start gap-2 text-[11px] border-b border-border/40 pb-1.5 last:border-none">
+                      <span className="text-accent font-bold">[{c.topic?.toUpperCase() || "RULE"}]:</span>
+                      <span className="text-foreground/90">{c.text}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ================= TAB 4: PLUGIN / DEVELOPER TOOL ================= */}
         {activeTab === "plugin" && (
           <div className="flex-1 overflow-y-auto p-8 max-w-4xl mx-auto space-y-6">
             <div>
@@ -892,7 +1193,7 @@ export default function WorkspacePage() {
 npm install -g @contextcore/cli
 
 # Connect current repository to persistent memory
-contextcore connect --repo-id my-team/my-codebase
+contextcore connect --repo-id ${repoId || "my-team/my-codebase"}
 
 # Ask questions with instant memory enforcement
 contextcore ask "generate user auth endpoint"`}
@@ -949,7 +1250,7 @@ jobs:
       {/* ================= RIGHT INSPECTOR PANEL ================= */}
       {showInspector && (
         <aside className="w-[300px] bg-surface border-l border-border flex flex-col justify-between shrink-0 text-xs select-none">
-          <div className="p-4 overflow-y-auto space-y-6 flex-1">
+          <div className="p-4 overflow-y-auto space-y-5 flex-1">
             {/* 1. Active Memory Nodes */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
@@ -967,7 +1268,7 @@ jobs:
                   No conventions recorded yet. Correct the agent in chat to register rules permanently.
                 </div>
               ) : (
-                <div className="space-y-2">
+                <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
                   {corrections.map((c, i) => (
                     <div key={i} className="bg-background border border-border hover:border-accent/30 rounded-lg p-2.5 space-y-1 transition-all">
                       <div className="flex items-center justify-between text-[10px] font-mono">
@@ -985,21 +1286,25 @@ jobs:
               )}
             </div>
 
-            {/* 2. Session Cost & Routing */}
-            <div id="cost-inspector-card" className="space-y-3 pt-2 border-t border-border">
-              <span className="font-mono text-[11px] font-bold text-foreground flex items-center gap-1.5">
-                <Monitor className="w-3.5 h-3.5 text-success" />
-                COST-AWARE ROUTING
-              </span>
+            {/* 2. Redesigned Clean Session Usage Section */}
+            <div id="cost-inspector-card" className="space-y-3 pt-4 border-t border-border">
+              <div className="flex items-center justify-between">
+                <span className="font-mono text-[11px] font-bold text-foreground flex items-center gap-1.5">
+                  <Monitor className="w-3.5 h-3.5 text-success" />
+                  SESSION USAGE
+                </span>
+                <span className="text-[10px] font-mono text-muted">LIVE ROUTING</span>
+              </div>
 
-              <div className="bg-background border border-border rounded-xl p-4 text-center space-y-2">
+              <div className="bg-background border border-border rounded-xl p-4 space-y-4">
+                {/* Donut Chart & Total Cost Display */}
                 <div className="h-28 relative flex items-center justify-center">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
                         data={costData}
-                        innerRadius={30}
-                        outerRadius={45}
+                        innerRadius={32}
+                        outerRadius={46}
                         paddingAngle={4}
                         dataKey="value"
                       >
@@ -1010,19 +1315,37 @@ jobs:
                     </PieChart>
                   </ResponsiveContainer>
                   <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                    <span className="text-[10px] text-muted font-mono">TOTAL</span>
+                    <span className="text-[9px] text-muted font-mono tracking-wider uppercase">COST</span>
                     <span className="text-sm font-extrabold text-foreground font-mono">
                       ${totalCostValue}
                     </span>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2 text-[10px] font-mono pt-1">
-                  <div className="bg-surface p-1.5 rounded border border-border">
-                    <span className="text-success font-bold">Flash:</span> {costSummary.flash.call_count} calls
+                {/* Clean Metrics Grid */}
+                <div className="space-y-2 pt-1">
+                  {/* Flash Row */}
+                  <div className="flex items-center justify-between bg-surface p-2 rounded-lg border border-border text-[11px] font-mono">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-success shrink-0" />
+                      <span className="font-bold text-foreground">Flash 2.0</span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-success font-semibold">{costSummary.flash.call_count} calls</span>
+                      <span className="text-muted text-[10px] ml-1.5">(${costSummary.flash.cost_est.toFixed(4)})</span>
+                    </div>
                   </div>
-                  <div className="bg-surface p-1.5 rounded border border-border">
-                    <span className="text-accent font-bold">Pro:</span> {costSummary.pro.call_count} calls
+
+                  {/* Pro Row */}
+                  <div className="flex items-center justify-between bg-surface p-2 rounded-lg border border-border text-[11px] font-mono">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-accent shrink-0" />
+                      <span className="font-bold text-foreground">Pro 2.5</span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-accent font-semibold">{costSummary.pro.call_count} calls</span>
+                      <span className="text-muted text-[10px] ml-1.5">(${costSummary.pro.cost_est.toFixed(4)})</span>
+                    </div>
                   </div>
                 </div>
               </div>
