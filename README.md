@@ -1,6 +1,6 @@
 # ContextCore | Persistent Memory AI Coding Partner
 
-ContextCore is a technical coding agent featuring long-term repository memory. By indexing source code files into semantic vector search spaces and recording team-specific corrections and architectural conventions into a persistent store (Firestore), ContextCore ensures that AI code generation adheres strictly to your codebase's established rules and patterns rather than generic standards.
+ContextCore is a persistent-memory coding partner built on the Google Antigravity SDK. It learns your codebase conventions through natural language corrections, embeds them into Vertex AI Vector Search, and retrieves them automatically — so you never repeat yourself.
 
 ![ContextCore Architecture Diagram](./architecture-diagram.svg)
 
