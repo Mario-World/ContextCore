@@ -72,19 +72,18 @@ is what turns a coding assistant into a coding *partner*.
 *   **AST-Based Code Ingestion:** Uses an Abstract Syntax Tree (AST) parser and text chunker to ensure code is indexed with semantic meaning rather than just raw text.
 *   **Real-time Context Visibility:** The UI shows you exactly which "Memory Nodes" are being used to generate a response, providing transparency into the AI's "thought process."
 
+## Cost-aware routing
 
-### Orchestration (Agents)
-The backend acts as the brain, orchestrating three specialized agents:
-*   **Coordinator Agent:** The central "router." It understands intent, chooses between Gemini 3.5 Pro (complex tasks) and Flash (simple tasks) to optimize costs, and manages execution checkpoints.
-*   **Memory Agent:** Responsible for retrieving relevant code via vector search and detecting verbal corrections (e.g., *"We use functional components here"*) to update the permanent memory pool.
-*   **Architect Agent:** Focused on the heavy lifting—generating, refactoring, and structured code output that adheres to retrieved repository conventions.
+Routing is a simple, explainable, hardcoded rule — not a learned classifier:
 
-### Services & Infrastructure
-*   **Vector Search Service:** Uses Vertex AI to index code repositories semantically.
-*   **Firestore Service:** Persists "Memory Nodes" (team rules/corrections), session history, and metadata.
-*   **Cost Tracking Service:** Provides real-time visibility into token usage and model spend.
-*   **GitHub Service:** Handles repository cloning, file metadata, and webhook integration.
+Flash: explain / summarize / retrieve / general questions
+Pro: generate / refactor / architect / implement / build / design
 
+Every call is logged to Firestore with an estimated token count and cost, surfaced live in the Session Usage panel.
+
+## Reliability model
+
+Before every step of the coordinator loop (memory retrieval, model selection, generation), state is checkpointed to Firestore keyed by session_id + step. On the next request for that session, the backend checks for an incomplete prior checkpoint and can resume rather than restart from zero — this is what "self-healing" means in practice here: not automatic error correction, but never losing already-completed work when a process dies.
 ---
 
 
@@ -112,6 +111,27 @@ ContextCore/
 
 ## 🛠 Installation & Setup
 
+1. GCP project
+Enable APIs: Vertex AI / Agent Platform, Cloud Firestore, Cloud Run
+Create a Firestore database (Native mode), region asia-south1
+Create a Vertex AI Vector Search index (768 dims, Streaming update method), create an Index Endpoint (Public), deploy the index to it
+Auth locally with gcloud auth application-default login — no service account JSON key needed (and typically blocked by org policy on new projects anyway)
+2. Backend
+bash
+cd backend
+pip install -r requirements.txt
+cp .env.example .env   # fill in project ID, region, index/endpoint IDs, Gemini API key, GitHub PAT
+uvicorn main:app --reload --port 8000
+3. Frontend
+bash
+cd frontend
+npm install
+echo "NEXT_PUBLIC_API_URL=http://localhost:8000" > .env.local
+npm run dev
+4. Deploy
+bash
+gcloud run deploy contextcore-backend --source ./backend --region asia-south1 --allow-unauthenticated
+gcloud run deploy contextcore-frontend --source ./frontend --region asia-south1 --allow-unauthenticated
 
 ```
 
