@@ -3,7 +3,7 @@
 
 ContextCore is a persistent-memory coding partner built on the Google Antigravity SDK. It learns your codebase conventions through natural language corrections, embeds them into Vertex AI Vector Search, and retrieves them automatically — ensuring you never have to repeat your architectural preferences or style guides to an AI twice.
 
-![ContextCore Architecture Diagram]
+# Architecture Diagram
 <img width="1536" height="1024" alt="ChatGPT Image Aug 31, 2026, 07_55_23 PM" src="https://github.com/user-attachments/assets/a4704cb1-c465-499b-a55c-c906c41596f8" />
 
 ---
