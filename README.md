@@ -1,43 +1,85 @@
-
 # ContextCore | Persistent Memory AI Coding Partner
 
-ContextCore is a persistent-memory coding partner built on the Google Antigravity SDK. It learns your codebase conventions through natural language corrections, embeds them into Vertex AI Vector Search, and retrieves them automatically — ensuring you never have to repeat your architectural preferences or style guides to an AI twice.
+ContextCore is a persistent-memory AI coding partner that learns your codebase and remembers your team’s coding conventions—so you don’t have to repeat them.
+ 
 
+<<<<<<< HEAD
 <<<<<<< HEAD
 ![ContextCore Architecture Diagram](./file:///D:/ChatGPT%20Image%20Aug%2031,%202026,%2007_55_23%20PM.svg)
 =======
 # Architecture Diagram
 <img width="1536" height="1024" alt="ChatGPT Image Aug 31, 2026, 07_55_23 PM" src="https://github.com/user-attachments/assets/a4704cb1-c465-499b-a55c-c906c41596f8" />
 >>>>>>> b4d21d7fad477c5d79e313bdb654b3d7170f13ff
+=======
+## The Problem
+
+Every LLM coding assistant today has the same failure mode: it's brilliant and
+then it forgets.
+
+- **Context window amnesia** — you explain your auth pattern, naming
+  conventions, and architectural decisions in every single session. The model
+  never carries it forward.
+- **Codebase scale exceeds context** — a real repo is 50k–500k lines. You
+  can't paste it all into a prompt every time.
+- **Enterprise trust = reliability, not cleverness** — enterprises don't adopt
+  agents because they're smart once; they adopt them when they don't lose
+  work, don't repeat mistakes, and don't silently die mid-task.
+
+ContextCore is a proof-of-concept that a memory layer — not a smarter model —
+is what turns a coding assistant into a coding *partner*.
+
+## Who this is for
+
+- Engineering teams onboarding AI pair-programmers into large legacy codebases
+- Consultancies juggling many client repos, each with different conventions
+- Platform teams evaluating whether to build an in-house coding agent or buy one
+>>>>>>> ba324e319bf206c0dd8dd139a3513ef99d0d4fd2
 
 ---
 
-## 🏗 Tech Stack
-Layer	Tech	Why
-Frontend	Next.js 14 + shadcn/ui + Tailwind	Your domain. Fast UI.
-Backend	FastAPI + Google ADK 2.0	Python async + Google’s hero framework
-LLM	Gemini 3.5 Flash (default) / Pro (complex)	Cost optimization + quality
-Embeddings	Gemini Embedding-001	Native Google, cheap
-Vector DB	Vertex AI Vector Search	Managed, scalable, Google-native
-State/Checkpoints	FireStore	Serverless, real-time, Google-native
-Hosting	Cloud Run (both services)	Scales to zero, required by judges
-Auth	GitHub Personal Access Token	Simple, no OAuth complexity
-Visualization	D3.js or Recharts	Memory graph
+## Core Loop
+
+1. **Onboard** a GitHub repo → chunked by function/class → embedded → indexed
+2. **Chat** with the agent about the codebase → it retrieves relevant context
+   from long-term memory before answering
+3. **Correct** the agent → the correction is persisted permanently, not just
+   for this session
+4. **Ask again** → the agent applies the correction automatically, with no
+   reminder
+5. **If the process crashes mid-task** → it resumes from the last checkpoint,
+   no lost work
+6. **Cost dashboard** → shows Flash vs. Pro model usage and real-time
+   estimated spend
+
+---
+
+![ContextCore Architecture Diagram](./file:///D:/ChatGPT%20Image%20Aug%2031,%202026,%2007_55_23%20PM.svg)
+
+---
+
+## 🏗 Tech Stack 
+| Layer | Technology | Purpose |
+|---|---|---|
+| **Frontend** | Next.js 14 + shadcn/ui + Tailwind | Developer workspace |
+| **Backend** | FastAPI + Google ADK 2.0 | Agent orchestration |
+| **LLM** | Gemini 3.5 Flash / Pro | Code generation & reasoning |
+| **Embeddings** | Gemini Embedding-001 | Code embeddings |
+| **Vector DB** | Vertex AI Vector Search | Semantic code retrieval |
+| **State** | Firestore | Persistent memory & checkpoints |
+| **Hosting** | Cloud Run | Google Cloud deployment |
+| **Auth** | GitHub Personal Access Token | Repository access |
+| **Visualization** | Recharts | Memory & cost visualization |
 
 
-### 1. Frontend 
-A three-panel developer workspace designed for high-context engineering:
-*   **Navigation Sidebar:** Manage workspaces, GitHub integrations, and deployment pipelines.
-*   **Chat Workspace:** Real-time interaction featuring "Thinking Pulses," syntax-highlighted code cards, and repository ingestion controls.
-*   **Inspector Panel:** A live view of active Memory Nodes (the rules currently influencing the AI), real-time cost breakdowns (via Recharts), and active context files.
 
-### 2. Backend Orchestration 
+
+### Orchestration (Agents)
 The backend acts as the brain, orchestrating three specialized agents:
 *   **Coordinator Agent:** The central "router." It understands intent, chooses between Gemini 3.5 Pro (complex tasks) and Flash (simple tasks) to optimize costs, and manages execution checkpoints.
 *   **Memory Agent:** Responsible for retrieving relevant code via vector search and detecting verbal corrections (e.g., *"We use functional components here"*) to update the permanent memory pool.
 *   **Architect Agent:** Focused on the heavy lifting—generating, refactoring, and structured code output that adheres to retrieved repository conventions.
 
-### 3. Services & Infrastructure
+### Services & Infrastructure
 *   **Vector Search Service:** Uses Vertex AI to index code repositories semantically.
 *   **Firestore Service:** Persists "Memory Nodes" (team rules/corrections), session history, and metadata.
 *   **Cost Tracking Service:** Provides real-time visibility into token usage and model spend.
@@ -76,25 +118,7 @@ ContextCore/
 
 ## 🛠 Installation & Setup
 
-### Prerequisites
-* Python 3.10+ | Node.js 18+
-* Google Cloud Project with Firestore & Vertex AI enabled.
-* Gemini API Credentials.
 
-### 1. Backend Setup
-```bash
-cd backend
-pip install -r requirements.txt
-# Configure your .env with GEMINI_API_KEY and GOOGLE_CLOUD_PROJECT
-uvicorn main:app --reload --port 8000
-```
-
-### 2. Frontend Setup
-```bash
-cd frontend
-npm install
-# Set NEXT_PUBLIC_API_URL=http://localhost:8000 in .env.local
-npm run dev
 ```
 
 ---
@@ -120,8 +144,10 @@ npm run dev
 
 ---
 
-## ✨ What ContextCore Achieves
-*   ✅ **Consistency:** AI responses always follow your specific codebase rules.
-*   ✅ **Efficiency:** Learns from team corrections permanently—no more repeating yourself.
-*   ✅ **Optimization:** Smarter model routing equals lower costs.
-*   ✅ **Transparency:** Real-time visibility into cost and active context.
+## Future scope (v1)
+
+- GitHub PR creation
+- Slack integration
+- Real-time multi-user collaboration
+
+These are natural v2 extensions once the core memory/reliability/cost loop is proven.
