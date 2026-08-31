@@ -140,7 +140,7 @@ def health_check() -> Dict[str, str]:
 @app.post("/ingest")
 def ingest_repo(req: IngestRequest) -> Dict[str, Any]:
     """
-    Clones GitHub repository, chunks code files, embeds, and stores into Vector Search and Firestore.
+    Clones GitHub repository, chunks code files, embeds in batch, and stores into Vector Search and Firestore.
     """
     try:
         url_to_clone = req.github_url or req.repo_url
@@ -149,9 +149,12 @@ def ingest_repo(req: IngestRequest) -> Dict[str, Any]:
         repo_path = github_tools.clone_repo(url_to_clone)
         try:
             code_files = github_tools.list_code_files(repo_path)
-            chunks_stored = 0
+            # Prioritize core files, cap at 40 files for ultra-responsive onboarding
+            priority_files = [f for f in code_files if not any(x in f.lower() for x in ["test", "doc", "example", "bench", "fixture"])]
+            files_to_index = priority_files[:40] if priority_files else code_files[:40]
 
-            for file_path in code_files:
+            all_chunks = []
+            for file_path in files_to_index:
                 try:
                     with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                         content = f.read()
@@ -160,21 +163,52 @@ def ingest_repo(req: IngestRequest) -> Dict[str, Any]:
 
                 rel_path = os.path.relpath(file_path, repo_path).replace("\\", "/")
                 chunks = code_parser.chunk_file(content, rel_path)
+                # Keep top symbol chunks per file
+                for c in chunks[:6]:
+                    all_chunks.append({
+                        "text": c["text"],
+                        "file_path": c["file_path"],
+                        "repo_id": req.repo_id,
+                    })
 
-                for chunk in chunks:
-                    memory_agent.store_code_chunk(
-                        text=chunk["text"],
-                        file_path=chunk["file_path"],
-                        repo_id=req.repo_id,
-                    )
-                    chunks_stored += 1
+            # Fast Batch Embedding
+            from backend.services import embedding_service
+            chunk_texts = [c["text"] for c in all_chunks]
+            embeddings = embedding_service.embed_texts_batch(chunk_texts)
+
+            # Store into Vector Store and Firestore
+            from backend.storage import storage
+            from backend.chunker import CodeChunk
+
+            mock_chunks = []
+            for idx, (chunk_data, emb) in enumerate(zip(all_chunks, embeddings)):
+                cid = f"chunk_{idx}_{abs(hash(chunk_data['text'])) % 100000}"
+                fpath = chunk_data["file_path"]
+                mock_chunks.append(CodeChunk(
+                    chunk_id=cid,
+                    file_path=fpath,
+                    symbol_name=fpath.split("/")[-1].split(".")[0],
+                    chunk_type="function" if "def " in chunk_data["text"] else "class" if "class " in chunk_data["text"] else "block",
+                    start_line=1,
+                    end_line=max(1, len(chunk_data["text"].splitlines())),
+                    content=chunk_data["text"],
+                    docstring="",
+                    language="python" if fpath.endswith(".py") else "typescript"
+                ))
+
+            if mock_chunks and embeddings:
+                storage.upsert_chunks_and_vectors(
+                    repo_id=req.repo_id,
+                    chunks=mock_chunks,
+                    embeddings=embeddings
+                )
 
             return {
                 "status": "success",
                 "repo_id": req.repo_id,
-                "files_processed": len(code_files),
-                "chunks_stored": chunks_stored,
-                "chunks_indexed": chunks_stored,
+                "files_processed": len(files_to_index),
+                "chunks_stored": len(all_chunks),
+                "chunks_indexed": len(all_chunks),
             }
         finally:
             github_tools.cleanup_repo(repo_path)
