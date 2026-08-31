@@ -1,4 +1,4 @@
-# ContextCore - AI Coding Partner
+# ContextCore - AI Partner remembers your code
 
 ContextCore is a persistent-memory AI coding partner that learns your codebase and remembers your team’s coding conventions—so you don’t have to repeat them.
  
@@ -81,9 +81,56 @@ Pro: generate / refactor / architect / implement / build / design
 
 Every call is logged to Firestore with an estimated token count and cost, surfaced live in the Session Usage panel.
 
+
 ## Reliability model
 
-Before every step of the coordinator loop (memory retrieval, model selection, generation), state is checkpointed to Firestore keyed by session_id + step. On the next request for that session, the backend checks for an incomplete prior checkpoint and can resume rather than restart from zero — this is what "self-healing" means in practice here: not automatic error correction, but never losing already-completed work when a process dies.
+Before every step of the coordinator loop (memory retrieval, model selection,
+generation), state is checkpointed to Firestore keyed by `session_id + step`.
+On the next request for that session, the backend checks for an incomplete
+prior checkpoint and can resume rather than restart from zero — this is what
+"self-healing" means in practice here: not automatic error correction, but
+never losing already-completed work when a process dies.
+
+---
+
+## Setup
+
+### 1. GCP project
+- Enable APIs: Vertex AI / Agent Platform, Cloud Firestore, Cloud Run
+- Create a Firestore database (Native mode), region `asia-south1`
+- Create a Vertex AI Vector Search index (768 dims, Streaming update method),
+  create an Index Endpoint (Public), deploy the index to it
+- Auth locally with `gcloud auth application-default login` — no service
+  account JSON key needed (and typically blocked by org policy on new
+  projects anyway)
+
+### 2. Backend
+```bash
+cd backend
+pip install -r requirements.txt
+cp .env.example .env   # fill in project ID, region, index/endpoint IDs, Gemini API key, GitHub PAT
+uvicorn main:app --reload --port 8000
+```
+
+### 3. Frontend
+```bash
+cd frontend
+npm install
+echo "NEXT_PUBLIC_API_URL=http://localhost:8000" > .env.local
+npm run dev
+```
+
+### 4. Deploy
+```bash
+gcloud run deploy contextcore-backend --source ./backend --region asia-south1 --allow-unauthenticated
+gcloud run deploy contextcore-frontend --source ./frontend --region asia-south1 --allow-unauthenticated
+```
+
+---
+
+
+
+
 ---
 
 
@@ -105,34 +152,6 @@ ContextCore/
 │   ├── components/           # Recharts dashboards and Chat UI
 │   ├── tailwind.config.ts    # Design system and theme
 │   └── package.json          # Node dependencies
-```
-
----
-
-## 🛠 Installation & Setup
-
-1. GCP project
-Enable APIs: Vertex AI / Agent Platform, Cloud Firestore, Cloud Run
-Create a Firestore database (Native mode), region asia-south1
-Create a Vertex AI Vector Search index (768 dims, Streaming update method), create an Index Endpoint (Public), deploy the index to it
-Auth locally with gcloud auth application-default login — no service account JSON key needed (and typically blocked by org policy on new projects anyway)
-2. Backend
-bash
-cd backend
-pip install -r requirements.txt
-cp .env.example .env   # fill in project ID, region, index/endpoint IDs, Gemini API key, GitHub PAT
-uvicorn main:app --reload --port 8000
-3. Frontend
-bash
-cd frontend
-npm install
-echo "NEXT_PUBLIC_API_URL=http://localhost:8000" > .env.local
-npm run dev
-4. Deploy
-bash
-gcloud run deploy contextcore-backend --source ./backend --region asia-south1 --allow-unauthenticated
-gcloud run deploy contextcore-frontend --source ./frontend --region asia-south1 --allow-unauthenticated
-
 ```
 
 ---
