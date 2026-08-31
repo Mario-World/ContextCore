@@ -3,14 +3,10 @@
 ContextCore is a persistent-memory AI coding partner that learns your codebase and remembers your team’s coding conventions—so you don’t have to repeat them.
  
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-![ContextCore Architecture Diagram](./file:///D:/ChatGPT%20Image%20Aug%2031,%202026,%2007_55_23%20PM.svg)
-=======
+
 # Architecture Diagram
 <img width="1536" height="1024" alt="ChatGPT Image Aug 31, 2026, 07_55_23 PM" src="https://github.com/user-attachments/assets/a4704cb1-c465-499b-a55c-c906c41596f8" />
->>>>>>> b4d21d7fad477c5d79e313bdb654b3d7170f13ff
-=======
+
 ## The Problem
 
 Every LLM coding assistant today has the same failure mode: it's brilliant and
@@ -53,7 +49,6 @@ is what turns a coding assistant into a coding *partner*.
 
 ---
 
-![ContextCore Architecture Diagram](./file:///D:/ChatGPT%20Image%20Aug%2031,%202026,%2007_55_23%20PM.svg)
 
 ---
 
@@ -71,6 +66,12 @@ is what turns a coding assistant into a coding *partner*.
 | **Visualization** | Recharts | Memory & cost visualization |
 
 
+## 🚀 Key Features
+
+*   **Persistent Team Memory:** Automatically detects corrections in chat, classifies them (auth, styling, naming, etc.), and stores them in Cloud Firestore. These rules are injected into every future prompt.
+*   **Smart Model Routing:** Dynamically routes queries to **Gemini 3.5 Pro** for architectural changes or **Gemini 3.5 Flash** for lookups, significantly reducing API costs.
+*   **AST-Based Code Ingestion:** Uses an Abstract Syntax Tree (AST) parser and text chunker to ensure code is indexed with semantic meaning rather than just raw text.
+*   **Real-time Context Visibility:** The UI shows you exactly which "Memory Nodes" are being used to generate a response, providing transparency into the AI's "thought process."
 
 
 ### Orchestration (Agents)
@@ -87,12 +88,6 @@ The backend acts as the brain, orchestrating three specialized agents:
 
 ---
 
-## 🚀 Key Features
-
-*   **Persistent Team Memory:** Automatically detects corrections in chat, classifies them (auth, styling, naming, etc.), and stores them in Cloud Firestore. These rules are injected into every future prompt.
-*   **Smart Model Routing:** Dynamically routes queries to **Gemini 3.5 Pro** for architectural changes or **Gemini 3.5 Flash** for lookups, significantly reducing API costs.
-*   **AST-Based Code Ingestion:** Uses an Abstract Syntax Tree (AST) parser and text chunker to ensure code is indexed with semantic meaning rather than just raw text.
-*   **Real-time Context Visibility:** The UI shows you exactly which "Memory Nodes" are being used to generate a response, providing transparency into the AI's "thought process."
 
 ---
 
