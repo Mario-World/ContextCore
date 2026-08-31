@@ -8,17 +8,26 @@ ContextCore is a persistent-memory coding partner built on the Google Antigravit
 
 ---
 
-## 🏗 System Architecture
+## 🏗 Tech Stack
+Layer	Tech	Why
+Frontend	Next.js 14 + shadcn/ui + Tailwind	Your domain. Fast UI.
+Backend	FastAPI + Google ADK 2.0	Python async + Google’s hero framework
+LLM	Gemini 3.5 Flash (default) / Pro (complex)	Cost optimization + quality
+Embeddings	Gemini Embedding-001	Native Google, cheap
+Vector DB	Vertex AI Vector Search	Managed, scalable, Google-native
+State/Checkpoints	FireStore	Serverless, real-time, Google-native
+Hosting	Cloud Run (both services)	Scales to zero, required by judges
+Auth	GitHub Personal Access Token	Simple, no OAuth complexity
+Visualization	D3.js or Recharts	Memory graph
 
-ContextCore utilizes a sophisticated multi-agent orchestration layer powered by **FastAPI** and **Google Gemini**, designed to bridge the gap between static code analysis and dynamic team conventions.
 
-### 1. Frontend (Next.js)
+### 1. Frontend 
 A three-panel developer workspace designed for high-context engineering:
 *   **Navigation Sidebar:** Manage workspaces, GitHub integrations, and deployment pipelines.
 *   **Chat Workspace:** Real-time interaction featuring "Thinking Pulses," syntax-highlighted code cards, and repository ingestion controls.
 *   **Inspector Panel:** A live view of active Memory Nodes (the rules currently influencing the AI), real-time cost breakdowns (via Recharts), and active context files.
 
-### 2. Backend Orchestration (FastAPI & Agents)
+### 2. Backend Orchestration 
 The backend acts as the brain, orchestrating three specialized agents:
 *   **Coordinator Agent:** The central "router." It understands intent, chooses between Gemini 3.5 Pro (complex tasks) and Flash (simple tasks) to optimize costs, and manages execution checkpoints.
 *   **Memory Agent:** Responsible for retrieving relevant code via vector search and detecting verbal corrections (e.g., *"We use functional components here"*) to update the permanent memory pool.
