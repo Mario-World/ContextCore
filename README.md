@@ -3,10 +3,6 @@
 ContextCore is a persistent-memory AI coding partner that learns your codebase and remembers your team’s coding conventions—so you don’t have to repeat them.
  
 
-
-# Architecture Diagram
-<img width="1536" height="1024" alt="ChatGPT Image Aug 31, 2026, 07_55_23 PM" src="https://github.com/user-attachments/assets/a4704cb1-c465-499b-a55c-c906c41596f8" />
-
 ## The Problem
 
 Every LLM coding assistant today has the same failure mode: it's brilliant and
@@ -29,7 +25,10 @@ is what turns a coding assistant into a coding *partner*.
 - Engineering teams onboarding AI pair-programmers into large legacy codebases
 - Consultancies juggling many client repos, each with different conventions
 - Platform teams evaluating whether to build an in-house coding agent or buy one
->>>>>>> ba324e319bf206c0dd8dd139a3513ef99d0d4fd2
+
+# Architecture Diagram
+<img width="1536" height="1024" alt="ChatGPT Image Aug 31, 2026, 07_55_23 PM" src="https://github.com/user-attachments/assets/a4704cb1-c465-499b-a55c-c906c41596f8" />
+
 
 ---
 
