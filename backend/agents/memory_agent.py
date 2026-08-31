@@ -53,6 +53,33 @@ def retrieve(query: str, repo_id: str, k: int = 6) -> Dict[str, List[Dict[str, A
     corrections = firestore_service.get_chunk_texts(correction_ids) if correction_ids else []
     code_chunks = firestore_service.get_chunk_texts(code_ids) if code_ids else []
 
+    # Fallback to local storage search if code_chunks is empty
+    if not code_chunks:
+        try:
+            from backend.storage import storage
+            local_results = storage.search_vectors(
+                query_vector=query_embedding,
+                repo_id=repo_id,
+                top_k=k
+            )
+            for lr in local_results:
+                if not lr.file_path.startswith("correction:"):
+                    code_chunks.append({
+                        "id": lr.chunk_id,
+                        "chunk_id": lr.chunk_id,
+                        "repo_id": lr.repo_id,
+                        "text": lr.content,
+                        "file_path": lr.file_path,
+                        "symbol_name": lr.symbol_name,
+                        "chunk_type": lr.chunk_type,
+                        "start_line": lr.start_line,
+                        "end_line": lr.end_line,
+                        "language": lr.language,
+                        "doc_type": "code_chunk"
+                    })
+        except Exception as e:
+            print(f"Warning: local storage fallback query failed ({e})")
+
     # If vector search yielded no corrections, fall back to listing recent corrections for the repo
     if not corrections:
         try:
@@ -60,6 +87,32 @@ def retrieve(query: str, repo_id: str, k: int = 6) -> Dict[str, List[Dict[str, A
             corrections = recent_corrections[:3]
         except Exception:
             pass
+
+    # If still no corrections, search local storage for correction records
+    if not corrections:
+        try:
+            from backend.storage import storage
+            local_results = storage.search_vectors(
+                query_vector=query_embedding,
+                repo_id=repo_id,
+                top_k=15
+            )
+            for lr in local_results:
+                if lr.file_path.startswith("correction:"):
+                    topic = lr.file_path.split(":", 1)[1] if ":" in lr.file_path else "General"
+                    corrections.append({
+                        "id": lr.chunk_id,
+                        "correction_id": lr.chunk_id,
+                        "repo_id": lr.repo_id,
+                        "text": lr.content,
+                        "file_path": lr.file_path,
+                        "topic": topic,
+                        "doc_type": "correction"
+                    })
+                    if len(corrections) >= 3:
+                        break
+        except Exception as e:
+            print(f"Warning: local storage fallback corrections query failed ({e})")
 
     return {
         "corrections": corrections,
@@ -93,6 +146,29 @@ def store_code_chunk(text: str, file_path: str, repo_id: str) -> str:
         file_path=file_path,
         doc_type="code_chunk",
     )
+
+    # Local fallback storage bridge
+    try:
+        from backend.storage import storage
+        from backend.chunker import CodeChunk
+        mock_chunk = CodeChunk(
+            chunk_id=chunk_id,
+            file_path=file_path,
+            symbol_name=file_path.split("/")[-1].split(".")[0],
+            chunk_type="block",
+            start_line=1,
+            end_line=max(1, len(text.splitlines())),
+            content=text,
+            docstring="",
+            language="python" if file_path.endswith(".py") else "typescript"
+        )
+        storage.upsert_chunks_and_vectors(
+            repo_id=repo_id,
+            chunks=[mock_chunk],
+            embeddings=[embedding]
+        )
+    except Exception as e:
+        print(f"Warning: Failed to save to local storage fallback ({e})")
 
     return chunk_id
 

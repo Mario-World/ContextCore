@@ -53,19 +53,25 @@ def upsert_vector(
     if not datapoint_id:
         datapoint_id = str(uuid.uuid4())
 
-    restricts = [
-        IndexDatapoint.Restriction(namespace="repo_id", allow_list=[repo_id]),
-        IndexDatapoint.Restriction(namespace="doc_type", allow_list=[doc_type]),
-    ]
+    try:
+        if not settings.VECTOR_SEARCH_INDEX:
+            raise ValueError("VECTOR_SEARCH_INDEX is not configured in settings.")
 
-    datapoint = IndexDatapoint(
-        datapoint_id=datapoint_id,
-        feature_vector=embedding,
-        restricts=restricts,
-    )
+        restricts = [
+            IndexDatapoint.Restriction(namespace="repo_id", allow_list=[repo_id]),
+            IndexDatapoint.Restriction(namespace="doc_type", allow_list=[doc_type]),
+        ]
 
-    index = get_index()
-    index.upsert_datapoints(datapoints=[datapoint])
+        datapoint = IndexDatapoint(
+            datapoint_id=datapoint_id,
+            feature_vector=embedding,
+            restricts=restricts,
+        )
+
+        index = get_index()
+        index.upsert_datapoints(datapoints=[datapoint])
+    except Exception as e:
+        print(f"Warning: Vector Search upsert skipped/failed ({e}). Local fallback will handle.")
 
     return datapoint_id
 
@@ -88,30 +94,34 @@ def query_vectors(
     Returns:
         List of dicts with 'id' and 'distance', e.g. [{"id": "...", "distance": 0.12}, ...]
     """
-    if not settings.VECTOR_SEARCH_DEPLOYED_INDEX:
-        raise ValueError("VECTOR_SEARCH_DEPLOYED_INDEX is not configured in settings.")
-
-    endpoint = get_index_endpoint()
-
-    filter_namespaces = [
-        Namespace(name="repo_id", allow_tokens=[repo_id])
-    ]
-    if doc_type:
-        filter_namespaces.append(Namespace(name="doc_type", allow_tokens=[doc_type]))
-
-    response = endpoint.find_neighbors(
-        deployed_index_id=settings.VECTOR_SEARCH_DEPLOYED_INDEX,
-        queries=[embedding],
-        num_neighbors=num_neighbors,
-        filter=filter_namespaces,
-    )
-
     results: List[Dict[str, Any]] = []
-    if response and len(response) > 0:
-        for neighbor in response[0]:
-            results.append({
-                "id": neighbor.id,
-                "distance": neighbor.distance,
-            })
+
+    try:
+        if not settings.VECTOR_SEARCH_DEPLOYED_INDEX or not settings.VECTOR_SEARCH_ENDPOINT:
+            raise ValueError("VECTOR_SEARCH_DEPLOYED_INDEX or VECTOR_SEARCH_ENDPOINT is not configured.")
+
+        endpoint = get_index_endpoint()
+
+        filter_namespaces = [
+            Namespace(name="repo_id", allow_tokens=[repo_id])
+        ]
+        if doc_type:
+            filter_namespaces.append(Namespace(name="doc_type", allow_tokens=[doc_type]))
+
+        response = endpoint.find_neighbors(
+            deployed_index_id=settings.VECTOR_SEARCH_DEPLOYED_INDEX,
+            queries=[embedding],
+            num_neighbors=num_neighbors,
+            filter=filter_namespaces,
+        )
+
+        if response and len(response) > 0:
+            for neighbor in response[0]:
+                results.append({
+                    "id": neighbor.id,
+                    "distance": neighbor.distance,
+                })
+    except Exception as e:
+        print(f"Warning: Vector Search query skipped/failed ({e}). Local fallback will handle.")
 
     return results

@@ -1,6 +1,6 @@
 import os
 import sys
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 # Ensure both backend and workspace root are available on sys.path
 backend_dir = os.path.dirname(os.path.abspath(__file__))
@@ -38,7 +38,8 @@ app.add_middleware(
 
 
 class IngestRequest(BaseModel):
-    github_url: str = Field(..., description="GitHub repository URL to clone and ingest")
+    github_url: Optional[str] = Field(None, description="GitHub repository URL to clone and ingest")
+    repo_url: Optional[str] = Field(None, description="Repository URL or path to clone and ingest (alternative name)")
     repo_id: str = Field(..., description="Unique repository identifier")
 
 
@@ -46,6 +47,12 @@ class ChatRequest(BaseModel):
     session_id: str = Field(..., description="Session identifier")
     repo_id: str = Field(..., description="Repository identifier")
     message: str = Field(..., description="User prompt or instruction")
+
+
+class QueryRequest(BaseModel):
+    query: str
+    repo_id: str
+    top_k: int = 5
 
 
 @app.get("/health")
@@ -63,7 +70,10 @@ def ingest_repo(req: IngestRequest) -> Dict[str, Any]:
     Clones GitHub repository, chunks code files, embeds, and stores into Vector Search and Firestore.
     """
     try:
-        repo_path = github_tools.clone_repo(req.github_url)
+        url_to_clone = req.github_url or req.repo_url
+        if not url_to_clone:
+            raise HTTPException(status_code=400, detail="Either github_url or repo_url must be provided.")
+        repo_path = github_tools.clone_repo(url_to_clone)
         try:
             code_files = github_tools.list_code_files(repo_path)
             chunks_stored = 0
@@ -87,9 +97,11 @@ def ingest_repo(req: IngestRequest) -> Dict[str, Any]:
                     chunks_stored += 1
 
             return {
-                "status": "ok",
+                "status": "success",
+                "repo_id": req.repo_id,
                 "files_processed": len(code_files),
                 "chunks_stored": chunks_stored,
+                "chunks_indexed": chunks_stored,
             }
         finally:
             github_tools.cleanup_repo(repo_path)
@@ -113,6 +125,46 @@ def chat(req: ChatRequest) -> Dict[str, Any]:
         )
         response["resumed_from_checkpoint"] = resumed_from_checkpoint
         return response
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/query")
+def query_index(req: QueryRequest) -> Dict[str, Any]:
+    """
+    Query endpoint for finding semantically similar code chunks using local/fallback storage.
+    """
+    try:
+        from backend.services import embedding_service
+        from backend.storage import storage
+
+        query_vector = embedding_service.embed_text(req.query, task_type="retrieval_query")
+        results = storage.search_vectors(
+            query_vector=query_vector,
+            repo_id=req.repo_id,
+            top_k=req.top_k
+        )
+
+        formatted_results = []
+        for r in results:
+            formatted_results.append({
+                "chunk_id": r.chunk_id,
+                "repo_id": r.repo_id,
+                "file_path": r.file_path,
+                "symbol_name": r.symbol_name,
+                "chunk_type": r.chunk_type,
+                "start_line": r.start_line,
+                "end_line": r.end_line,
+                "content": r.content,
+                "docstring": r.docstring,
+                "language": r.language,
+                "score": r.score
+            })
+
+        return {
+            "total_results": len(formatted_results),
+            "results": formatted_results
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

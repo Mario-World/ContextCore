@@ -29,11 +29,17 @@ def clone_repo(github_url: str) -> str:
     Uses GITHUB_TOKEN from configuration for authenticating private repositories if available.
     
     Args:
-        github_url: The URL of the GitHub repository (e.g., 'https://github.com/owner/repo').
+        github_url: The URL of the GitHub repository or a local path.
         
     Returns:
         The local filesystem path to the cloned repository.
     """
+    if os.path.isdir(github_url):
+        temp_dir = tempfile.mkdtemp(prefix="contextcore_clone_")
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        shutil.copytree(github_url, temp_dir)
+        return temp_dir
+
     temp_dir = tempfile.mkdtemp(prefix="contextcore_clone_")
     auth_url = github_url.strip()
     
