@@ -16,6 +16,7 @@ import {
   Layers,
   Code2,
   Calendar,
+  Network,
 } from "lucide-react";
 
 interface Correction {
@@ -117,6 +118,13 @@ export default function MemoryDashboardPage() {
         </div>
 
         <div className="flex items-center gap-3">
+          <Link
+            href="/graph"
+            className="flex items-center gap-1.5 bg-[#4f6bff] hover:bg-[#6881ff] text-white text-xs font-semibold px-3 py-1.5 rounded transition-all shadow-md shadow-[#4f6bff]/20"
+          >
+            <Network className="w-3.5 h-3.5" />
+            <span>Interactive Graph View</span>
+          </Link>
           <div className="flex items-center gap-2 bg-[#1c1b1c] px-3 py-1 rounded border border-[#27272a] text-xs font-mono">
             <span className="text-[#8e8fa1]">Repository:</span>
             <input

@@ -22,7 +22,9 @@ import {
   ArrowUp,
   MoreHorizontal,
   History,
-  FileCode
+  FileCode,
+  Network,
+  Sparkles
 } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
 
@@ -536,11 +538,23 @@ export default function WorkspacePage() {
               <span>Workspace</span>
             </Link>
             <Link
+              href="/graph"
+              className="w-full flex items-center justify-between px-3 py-2 text-xs font-medium text-muted hover:text-white rounded hover:bg-surface/50 transition-all cursor-pointer group"
+            >
+              <div className="flex items-center gap-3">
+                <Network className="w-4 h-4 text-accent group-hover:text-accent-hover transition-colors" />
+                <span>Memory Graph</span>
+              </div>
+              <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-accent/20 text-accent font-bold">
+                LIVE
+              </span>
+            </Link>
+            <Link
               href="/memory"
               className="w-full flex items-center gap-3 px-3 py-2 text-xs font-medium text-muted hover:text-white rounded hover:bg-surface/50 transition-all cursor-pointer"
             >
               <Database className="w-4 h-4" />
-              <span>Memory</span>
+              <span>Memory Table</span>
             </Link>
             <button
               onClick={scrollToCost}

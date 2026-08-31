@@ -52,3 +52,32 @@ def test_normal_chat_flow():
     user_message = "generate a refactored calculation module"
     res_pro = coordinator.handle_message(session_id, repo_id, user_message)
     assert res_pro["model_used"] == "gemini-2.5-pro"
+
+
+def test_memory_graph_generation():
+    repo_id = "test-org/graph-repo"
+    
+    # Store some conventions and chunks
+    memory_agent.store_correction(
+        text="Always use JWT Bearer tokens for auth",
+        topic="auth",
+        repo_id=repo_id
+    )
+    
+    graph_data = firestore_service.get_memory_graph(repo_id)
+    assert "nodes" in graph_data
+    assert "links" in graph_data
+    assert "stats" in graph_data
+    
+    nodes = graph_data["nodes"]
+    node_types = set(n["type"] for n in nodes)
+    assert "repo" in node_types
+    assert "topic" in node_types
+    assert "convention" in node_types
+    
+    stats = graph_data["stats"]
+    assert stats["repo_id"] == repo_id
+    assert stats["total_nodes"] > 0
+    assert stats["conventions_count"] >= 1
+    assert stats["enforcement_mode"] == "STRICT"
+

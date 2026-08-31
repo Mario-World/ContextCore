@@ -55,6 +55,12 @@ class QueryRequest(BaseModel):
     top_k: int = 5
 
 
+class AddConventionRequest(BaseModel):
+    repo_id: str = Field(..., description="Repository identifier")
+    text: str = Field(..., description="Convention or correction rule text")
+    topic: Optional[str] = Field(None, description="Topic domain (e.g. auth, database, state, naming, etc.)")
+
+
 @app.get("/health")
 def health_check() -> Dict[str, str]:
     """Health check endpoint."""
@@ -169,14 +175,57 @@ def query_index(req: QueryRequest) -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/memory/{repo_id}")
+@app.get("/graph/{repo_id:path}")
+@app.get("/memory-graph/{repo_id:path}")
+@app.get("/memory/{repo_id:path}/graph")
+def get_memory_graph_endpoint(repo_id: str) -> Dict[str, Any]:
+    """
+    Retrieves the full relational memory graph for a repository (nodes, links, metrics).
+    """
+    try:
+        # Strip trailing /graph if captured by path converter
+        clean_repo_id = repo_id
+        if clean_repo_id.endswith("/graph"):
+            clean_repo_id = clean_repo_id[:-6]
+        return firestore_service.get_memory_graph(clean_repo_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/memory/{repo_id:path}")
 def get_memory(repo_id: str) -> Dict[str, Any]:
     """
     Retrieves stored conventions and corrections for a specific repository.
     """
     try:
+        # Handle trailing /graph in case of route overlap
+        if repo_id.endswith("/graph"):
+            return firestore_service.get_memory_graph(repo_id[:-6])
         corrections = firestore_service.list_corrections(repo_id)
         return {"corrections": corrections}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/memory/add")
+def add_memory_convention(req: AddConventionRequest) -> Dict[str, Any]:
+    """
+    Directly adds a new convention or correction to repository memory.
+    """
+    try:
+        topic = req.topic or coordinator._guess_topic(req.text)
+        correction_id = memory_agent.store_correction(
+            text=req.text,
+            topic=topic,
+            repo_id=req.repo_id,
+        )
+        return {
+            "status": "success",
+            "correction_id": correction_id,
+            "repo_id": req.repo_id,
+            "topic": topic,
+            "text": req.text,
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

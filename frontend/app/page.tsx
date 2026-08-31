@@ -11,7 +11,8 @@ import {
   FolderGit2,
   Code2,
   Play,
-  FileText
+  FileText,
+  Network
 } from "lucide-react";
 
 export default function LandingPage() {
@@ -30,20 +31,29 @@ export default function LandingPage() {
             </span>
           </div>
 
-          {/* Center-Left Tab Links (Visual Only) */}
+          {/* Center-Left Tab Links */}
           <div className="hidden lg:flex items-center ml-8 border-l border-border pl-6 h-8 space-x-1">
-            <span className="px-3 py-1 text-xs font-semibold text-white bg-background border border-border rounded flex items-center gap-1.5 cursor-default select-none">
+            <Link
+              href="/workspace"
+              className="px-3 py-1 text-xs font-semibold text-white bg-background border border-border rounded flex items-center gap-1.5 hover:border-accent/40 transition-colors"
+            >
               <FolderGit2 className="w-3.5 h-3.5 text-accent" />
-              Explorer
-            </span>
-            <span className="px-3 py-1 text-xs font-medium text-muted hover:text-white rounded flex items-center gap-1.5 transition-colors cursor-default select-none">
-              <Terminal className="w-3.5 h-3.5 text-muted/60" />
-              Terminal
-            </span>
-            <span className="px-3 py-1 text-xs font-medium text-muted hover:text-white rounded flex items-center gap-1.5 transition-colors cursor-default select-none">
-              <Code2 className="w-3.5 h-3.5 text-muted/60" />
-              Debug
-            </span>
+              Workspace
+            </Link>
+            <Link
+              href="/graph"
+              className="px-3 py-1 text-xs font-medium text-muted hover:text-white rounded flex items-center gap-1.5 hover:bg-surface/50 transition-colors"
+            >
+              <Network className="w-3.5 h-3.5 text-accent" />
+              Memory Graph
+            </Link>
+            <Link
+              href="/memory"
+              className="px-3 py-1 text-xs font-medium text-muted hover:text-white rounded flex items-center gap-1.5 hover:bg-surface/50 transition-colors"
+            >
+              <Database className="w-3.5 h-3.5 text-muted/60" />
+              Conventions
+            </Link>
           </div>
         </div>
 
@@ -114,14 +124,23 @@ export default function LandingPage() {
         </p>
 
         {/* 4. Action Buttons */}
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-24 w-full max-w-md">
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-24 w-full max-w-lg">
           {/* Start a New Session Button */}
           <Link
             href="/workspace"
             className="w-full sm:w-auto px-8 py-3.5 bg-accent hover:bg-accent-hover text-white font-semibold rounded text-sm transition-all duration-200 flex items-center justify-center gap-2 shadow-lg shadow-accent/20 hover:shadow-accent/30 hover:-translate-y-0.5 active:translate-y-0"
           >
             <Play className="w-4 h-4 fill-current text-white" />
-            <span>Start a New Session</span>
+            <span>Start Session</span>
+          </Link>
+
+          {/* Explore Memory Graph Button */}
+          <Link
+            href="/graph"
+            className="w-full sm:w-auto px-8 py-3.5 bg-[#1A1A1E] hover:bg-[#26262B] border border-accent/40 hover:border-accent text-white font-semibold rounded text-sm transition-all duration-200 flex items-center justify-center gap-2 shadow-lg hover:-translate-y-0.5 active:translate-y-0"
+          >
+            <Network className="w-4 h-4 text-accent" />
+            <span>Memory Graph</span>
           </Link>
 
           {/* Docs Button */}
@@ -129,7 +148,7 @@ export default function LandingPage() {
             href="https://github.com/mario-world/contextcore"
             target="_blank"
             rel="noopener noreferrer"
-            className="w-full sm:w-auto px-8 py-3.5 border border-border hover:border-accent/40 bg-surface/50 hover:bg-surface text-white font-semibold rounded text-sm transition-all duration-200 flex items-center justify-center gap-2 hover:-translate-y-0.5 active:translate-y-0"
+            className="w-full sm:w-auto px-6 py-3.5 border border-border hover:border-accent/40 bg-surface/50 hover:bg-surface text-white font-semibold rounded text-sm transition-all duration-200 flex items-center justify-center gap-2 hover:-translate-y-0.5 active:translate-y-0"
           >
             <FileText className="w-4 h-4 text-muted" />
             <span>Docs</span>
