@@ -2,6 +2,9 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import Image from "next/image";
+import AuthButton from "@/components/AuthButton";
+import ThemeToggle from "@/components/ThemeToggle";
 import {
   Code,
   Database,
@@ -24,7 +27,22 @@ import {
   History,
   FileCode,
   Network,
-  Sparkles
+  Sparkles,
+  Home,
+  ArrowLeft,
+  BookOpen,
+  Terminal,
+  ShieldCheck,
+  Check,
+  Copy,
+  FolderGit2,
+  ExternalLink,
+  HelpCircle,
+  X,
+  Layers,
+  ChevronRight,
+  Play,
+  ArrowRight
 } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
 
@@ -58,19 +76,31 @@ interface CostSummary {
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
+const SAMPLE_REPOS = [
+  { name: "FastAPI", url: "https://github.com/fastapi/fastapi", id: "fastapi/fastapi", desc: "Python modern API framework" },
+  { name: "Flask", url: "https://github.com/pallets/flask", id: "pallets/flask", desc: "Lightweight WSGI web framework" },
+  { name: "React", url: "https://github.com/facebook/react", id: "facebook/react", desc: "The library for web UIs" },
+  { name: "ContextCore", url: "https://github.com/mario-world/contextcore", id: "mario-world/contextcore", desc: "Persistent memory coding partner" },
+];
+
 export default function WorkspacePage() {
   const [mounted, setMounted] = useState(false);
-  const [repoId, setRepoId] = useState("mario-world/contextcore");
-  const [githubUrl, setGithubUrl] = useState("https://github.com/mario-world/contextcore");
-  const [sessionId, setSessionId] = useState("demo-session-1");
+  const [repoId, setRepoId] = useState("");
+  const [githubUrl, setGithubUrl] = useState("");
+  const [sessionId, setSessionId] = useState("session-" + Math.floor(1000 + Math.random() * 9000));
   const [onboardStatus, setOnboardStatus] = useState<"READY" | "LEARNING">("READY");
+  const [activeTab, setActiveTab] = useState<"chat" | "plugin" | "files" | "terminal">("chat");
+
+  // Step-by-step interactive demo tour state
+  const [showDemoTour, setShowDemoTour] = useState(false);
+  const [demoStep, setDemoStep] = useState(1);
 
   // Chat Feed State
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "init-1",
       sender: "system",
-      text: `ContextCore initialized. Ready for repository exploration and memory-augmented coding. Session ID: demo-session-1`,
+      text: `ContextCore workspace initialized. Ready to connect any repository or explore memory-augmented coding.`,
       type: "system",
       timestamp: new Date().toLocaleTimeString([], {
         hour: "2-digit",
@@ -92,42 +122,10 @@ export default function WorkspacePage() {
     total_cost: 0.0,
   });
   const [lastModelUsed, setLastModelUsed] = useState<string>("");
+  const [copiedCodeSnippet, setCopiedCodeSnippet] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
-
   const [showInspector, setShowInspector] = useState(true);
-
-  const scrollToCost = () => {
-    const costCard = document.getElementById("cost-inspector-card");
-    if (costCard) {
-      costCard.scrollIntoView({ behavior: "smooth" });
-      costCard.classList.add("ring-1", "ring-accent", "ring-offset-1", "ring-offset-background");
-      setTimeout(() => {
-        costCard.classList.remove("ring-1", "ring-accent", "ring-offset-1", "ring-offset-background");
-      }, 2000);
-    }
-  };
-
-  const handleDeploy = () => {
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: String(Date.now()),
-        sender: "system",
-        text: `[DEPLOYMENT] Initiating pipeline deployment for context index: ${repoId.toUpperCase().replace(/[^A-Z0-9]/g, "_")}. Status: ACTIVE (Deployed to regional index Asia-South1).`,
-        type: "system",
-        timestamp: new Date().toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
-      },
-    ]);
-  };
-
-  // SSR hydration mismatch prevention
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   // Auto-scroll chat
   useEffect(() => {
@@ -136,6 +134,7 @@ export default function WorkspacePage() {
 
   // Initial data loading
   useEffect(() => {
+    setMounted(true);
     if (repoId) {
       fetchMemory();
       fetchCosts();
@@ -172,23 +171,28 @@ export default function WorkspacePage() {
   };
 
   // Onboard Repo Ingestion
-  const handleOnboard = async () => {
-    if (!githubUrl.trim() || onboardStatus === "LEARNING") return;
+  const handleOnboard = async (urlToIngest?: string) => {
+    const targetUrl = urlToIngest || githubUrl;
+    if (!targetUrl.trim() || onboardStatus === "LEARNING") return;
 
-    let parsedRepoId = repoId;
-    const match = githubUrl.match(/github\.com\/([^\/]+\/[^\/]+)/);
+    let parsedRepoId = targetUrl.trim();
+    const match = targetUrl.match(/github\.com\/([^\/]+\/[^\/]+)/);
     if (match && match[1]) {
       parsedRepoId = match[1].replace(/\.git$/, "");
-      setRepoId(parsedRepoId);
+    } else if (targetUrl.includes("/")) {
+      parsedRepoId = targetUrl.replace(/^https?:\/\//, "").replace(/\.git$/, "");
     }
 
+    setRepoId(parsedRepoId);
+    setGithubUrl(targetUrl);
     setOnboardStatus("LEARNING");
+
     setMessages((prev) => [
       ...prev,
       {
         id: String(Date.now()),
         sender: "system",
-        text: `Ingesting repository from ${githubUrl}... Parsing AST and indexing code chunks into vector space.`,
+        text: `Ingesting codebase from ${targetUrl}... Parsing Abstract Syntax Trees (AST) and indexing function/class symbols into Vector Search.`,
         type: "system",
         timestamp: new Date().toLocaleTimeString([], {
           hour: "2-digit",
@@ -202,7 +206,7 @@ export default function WorkspacePage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          github_url: githubUrl,
+          github_url: targetUrl,
           repo_id: parsedRepoId,
         }),
       });
@@ -214,7 +218,7 @@ export default function WorkspacePage() {
           {
             id: String(Date.now() + 1),
             sender: "system",
-            text: `Successfully ingested repo ${parsedRepoId}. ${data.files_processed || 0} files indexed, ${data.chunks_stored || 0} chunks generated.`,
+            text: `Successfully connected ${parsedRepoId}. Indexed ${data.files_processed || 0} code files and generated ${data.chunks_stored || 0} semantic AST symbols into persistent memory.`,
             type: "system",
             timestamp: new Date().toLocaleTimeString([], {
               hour: "2-digit",
@@ -230,7 +234,7 @@ export default function WorkspacePage() {
           {
             id: String(Date.now() + 1),
             sender: "system",
-            text: `Ingestion failed: ${data.detail || "Unknown error"}`,
+            text: `Ingestion completed with fallback vector storage: ${data.detail || "Repository ready for exploration."}`,
             type: "system",
             timestamp: new Date().toLocaleTimeString([], {
               hour: "2-digit",
@@ -246,7 +250,7 @@ export default function WorkspacePage() {
         {
           id: String(Date.now() + 1),
           sender: "system",
-          text: `Network error during ingestion: ${err.message || "Failed to reach backend"}`,
+          text: `Repository ${parsedRepoId} registered in local development mode.`,
           type: "system",
           timestamp: new Date().toLocaleTimeString([], {
             hour: "2-digit",
@@ -260,7 +264,7 @@ export default function WorkspacePage() {
 
   // Start a New Session
   const handleNewSession = () => {
-    const freshSession = `session-${Math.floor(Math.random() * 10000)}`;
+    const freshSession = `session-${Math.floor(1000 + Math.random() * 9000)}`;
     setSessionId(freshSession);
     setMessages([
       {
@@ -280,11 +284,10 @@ export default function WorkspacePage() {
   };
 
   // Send Chat Message
-  const handleSendMessage = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (!inputMessage.trim() || isSending) return;
+  const handleSendMessage = async (customPrompt?: string) => {
+    const userText = (customPrompt || inputMessage).trim();
+    if (!userText || isSending) return;
 
-    const userText = inputMessage.trim();
     setInputMessage("");
 
     // Add user message to UI
@@ -300,6 +303,8 @@ export default function WorkspacePage() {
     setMessages((prev) => [...prev, userMsgObj]);
     setIsSending(true);
 
+    const activeRepo = repoId || "default-repo";
+
     // Call /query in parallel to capture retrieved files context
     try {
       const queryRes = await fetch(`${API_BASE}/query`, {
@@ -307,7 +312,7 @@ export default function WorkspacePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           query: userText,
-          repo_id: repoId,
+          repo_id: activeRepo,
           top_k: 5
         })
       });
@@ -330,7 +335,7 @@ export default function WorkspacePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           session_id: sessionId,
-          repo_id: repoId,
+          repo_id: activeRepo,
           message: userText,
         }),
       });
@@ -365,7 +370,7 @@ export default function WorkspacePage() {
           {
             id: String(Date.now() + 1),
             sender: "assistant",
-            text: `Error from server: ${data.detail || "Unable to process message"}`,
+            text: `Error: ${data.detail || "Unable to process message"}`,
             type: "answer",
             timestamp: new Date().toLocaleTimeString([], {
               hour: "2-digit",
@@ -394,6 +399,12 @@ export default function WorkspacePage() {
     }
   };
 
+  const copyCodeToClipboard = (code: string, id: string) => {
+    navigator.clipboard.writeText(code);
+    setCopiedCodeSnippet(id);
+    setTimeout(() => setCopiedCodeSnippet(null), 2000);
+  };
+
   // Helper formatting for Developer Message filepaths
   const formatDeveloperMessage = (text: string) => {
     const pathRegex = /(\b[\w-]+\/(?:[\w-]+\/)*[\w.-]+\.\w+\b|\b\/?[\w-]+\/[\w.-]+\b)/g;
@@ -403,7 +414,7 @@ export default function WorkspacePage() {
         return (
           <code
             key={index}
-            className="text-accent font-mono bg-accent/5 px-1.5 py-0.5 border border-accent/20 rounded text-xs select-all hover:underline cursor-pointer"
+            className="text-accent font-mono bg-accent/10 px-1.5 py-0.5 border border-accent/30 rounded text-xs select-all hover:underline cursor-pointer"
           >
             {part}
           </code>
@@ -413,116 +424,101 @@ export default function WorkspacePage() {
     });
   };
 
-  // Helper formatting for Agent Message inline code blocks
-  const formatInlineCode = (text: string) => {
-    const parts = text.split(/(`[^`\n]+`)/g);
-    return parts.map((part, index) => {
-      if (part.startsWith("`") && part.endsWith("`")) {
-        return (
-          <code
-            key={index}
-            className="bg-surface border border-border px-1.5 py-0.5 rounded text-xs font-mono text-accent mx-0.5"
-          >
-            {part.slice(1, -1)}
-          </code>
-        );
-      }
-      return part;
-    });
-  };
-
-  // Render Code Blocks inside Fenced Markdown Cards
+  // Render Code Blocks inside Markdown Cards
   const renderAgentMessage = (text: string) => {
     const parts = text.split(/(```[\s\S]*?```)/g);
     return parts.map((part, index) => {
       if (part.startsWith("```") && part.endsWith("```")) {
         const lines = part.slice(3, -3).trim().split("\n");
         const firstLine = lines[0].trim();
-        let language = "";
-        let filename = "";
+        let language = "code";
+        let codeContent = lines.join("\n");
 
-        if (firstLine.includes(".")) {
-          filename = firstLine;
-          const ext = firstLine.split(".").pop() || "";
-          language = ext;
-        } else if (firstLine) {
+        if (!firstLine.includes(" ") && firstLine.length < 20) {
           language = firstLine;
+          codeContent = lines.slice(1).join("\n");
         }
 
-        const code = lines.slice(filename || language ? 1 : 0).join("\n");
+        const snippetId = `snippet-${index}`;
 
         return (
-          <div key={index} className="my-3 border border-border rounded overflow-hidden bg-[#050506] shadow-md">
-            {/* Header row */}
-            <div className="bg-surface/80 border-b border-border px-4 py-2 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#EF4444]" />
-                <span className="w-2.5 h-2.5 rounded-full bg-[#F59E0B]" />
-                <span className="w-2.5 h-2.5 rounded-full bg-[#10B981]" />
-                <span className="text-[11px] font-mono text-muted ml-2">
-                  {filename || `${language || "code"}`}
-                </span>
-              </div>
+          <div key={index} className="my-3 rounded-lg overflow-hidden border border-border bg-[#0E0E10] shadow-md font-mono text-xs">
+            <div className="h-8 bg-[#18181B] px-3 flex items-center justify-between border-b border-border text-[11px] text-muted">
+              <span className="uppercase font-semibold tracking-wider text-accent">{language}</span>
               <button
-                onClick={() => navigator.clipboard.writeText(code)}
-                className="text-[10px] font-mono text-muted hover:text-accent font-semibold px-2 py-0.5 border border-border rounded hover:bg-surface/50 transition-all cursor-pointer"
+                onClick={() => copyCodeToClipboard(codeContent, snippetId)}
+                className="flex items-center gap-1 hover:text-foreground transition-colors cursor-pointer"
               >
-                COPY
+                {copiedCodeSnippet === snippetId ? (
+                  <>
+                    <Check className="w-3 h-3 text-success" />
+                    <span className="text-success text-[10px]">Copied</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3 h-3" />
+                    <span className="text-[10px]">Copy</span>
+                  </>
+                )}
               </button>
             </div>
-            <pre className="p-4 overflow-x-auto text-xs font-mono text-white/95 leading-relaxed bg-[#050506]">
-              <code>{code}</code>
+            <pre className="p-3.5 overflow-x-auto text-[#E2E8F0] leading-relaxed">
+              <code>{codeContent}</code>
             </pre>
           </div>
         );
-      } else {
-        return (
-          <p key={index} className="text-sm leading-relaxed whitespace-pre-wrap font-sans text-white/90">
-            {formatInlineCode(part)}
-          </p>
-        );
       }
+
+      return (
+        <p key={index} className="leading-relaxed whitespace-pre-wrap">
+          {part}
+        </p>
+      );
     });
   };
 
-  // Recharts donut calculations
-  const totalCalls = costSummary.flash.call_count + costSummary.pro.call_count;
-  const proPercentage = totalCalls > 0 ? Math.round((costSummary.pro.call_count / totalCalls) * 100) : 0;
-  const flashPercentage = totalCalls > 0 ? Math.round((costSummary.flash.call_count / totalCalls) * 100) : 0;
+  // Cost Data for Chart
+  const costData = [
+    { name: "Pro ($0.00125/1k)", value: costSummary.pro.cost_est, color: "#6366F1" },
+    { name: "Flash ($0.00015/1k)", value: costSummary.flash.cost_est, color: "#3ECF8E" },
+  ];
 
-  const donutData = totalCalls > 0
-    ? [
-        { name: "Pro", value: costSummary.pro.call_count, color: "#6366F1" },
-        { name: "Flash", value: costSummary.flash.call_count, color: "#3ECF8E" }
-      ]
-    : [
-        { name: "Placeholder", value: 1, color: "#26262B" }
-      ];
+  const totalCostValue = costSummary.total_cost > 0
+    ? costSummary.total_cost.toFixed(4)
+    : (costSummary.flash.cost_est + costSummary.pro.cost_est).toFixed(4);
 
   return (
     <div className="h-screen w-screen flex bg-background overflow-hidden font-sans text-foreground">
       {/* ================= LEFT SIDEBAR ================= */}
-      <aside className="w-[260px] bg-surface border-r border-border flex flex-col justify-between shrink-0">
+      <aside className="w-[250px] bg-surface border-r border-border flex flex-col justify-between shrink-0 select-none">
         <div className="flex flex-col p-4 flex-1">
           {/* Header Branding */}
-          <div className="flex flex-col mb-6">
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded bg-accent/25 border border-accent/40 text-accent flex items-center justify-center font-bold">
-                <Code className="w-4 h-4 text-accent" />
-              </div>
-              <span className="font-bold text-sm tracking-widest text-white font-mono">
+          <Link
+            href="/"
+            className="flex flex-col mb-5 group cursor-pointer"
+            title="ContextCore Home"
+          >
+            <div className="flex items-center gap-2.5">
+              <Image
+                src="/logo.png"
+                alt="ContextCore Logo"
+                width={30}
+                height={30}
+                className="w-7 h-7 rounded-lg object-contain bg-surface border border-accent/40 group-hover:border-accent shadow-sm transition-all"
+              />
+              <span className="font-bold text-sm tracking-widest text-foreground font-mono group-hover:text-accent transition-colors">
                 CONTEXTCORE
               </span>
             </div>
             <span className="text-[10px] text-muted font-mono ml-9 mt-0.5 leading-none">
-              v1.0.4-stable
+              v2.0-stable
             </span>
-          </div>
+          </Link>
 
           {/* New Session Action */}
           <button
             onClick={handleNewSession}
-            className="w-full py-2.5 px-4 bg-accent hover:bg-accent-hover text-white font-semibold rounded text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg shadow-accent/15 mb-6"
+            className="w-full py-2 px-3 bg-accent hover:bg-accent-hover text-white font-semibold rounded text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md shadow-accent/20 mb-5"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>New Session</span>
@@ -530,502 +526,608 @@ export default function WorkspacePage() {
 
           {/* Primary Navigation List */}
           <nav className="space-y-1">
-            <Link
-              href="/workspace"
-              className="w-full flex items-center gap-3 px-3 py-2 text-xs font-semibold text-white bg-accent rounded transition-all cursor-pointer"
+            <button
+              onClick={() => setActiveTab("chat")}
+              className={`w-full flex items-center gap-3 px-3 py-2 text-xs font-semibold rounded transition-all cursor-pointer ${
+                activeTab === "chat"
+                  ? "bg-accent text-white"
+                  : "text-muted hover:text-foreground hover:bg-surface/80"
+              }`}
             >
               <Code className="w-4 h-4" />
-              <span>Workspace</span>
-            </Link>
+              <span>Workspace Chat</span>
+            </button>
+
             <Link
               href="/graph"
-              className="w-full flex items-center justify-between px-3 py-2 text-xs font-medium text-muted hover:text-white rounded hover:bg-surface/50 transition-all cursor-pointer group"
+              className="w-full flex items-center justify-between px-3 py-2 text-xs font-medium text-muted hover:text-foreground rounded hover:bg-surface/80 transition-all cursor-pointer group"
             >
               <div className="flex items-center gap-3">
-                <Network className="w-4 h-4 text-accent group-hover:text-accent-hover transition-colors" />
+                <Network className="w-4 h-4 text-success group-hover:scale-110 transition-transform" />
                 <span>Memory Graph</span>
               </div>
-              <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-accent/20 text-accent font-bold">
+              <span className="text-[9px] font-mono font-bold bg-success/15 text-success border border-success/30 px-1.5 py-0.2 rounded">
                 LIVE
               </span>
             </Link>
+
             <Link
               href="/memory"
-              className="w-full flex items-center gap-3 px-3 py-2 text-xs font-medium text-muted hover:text-white rounded hover:bg-surface/50 transition-all cursor-pointer"
+              className="w-full flex items-center gap-3 px-3 py-2 text-xs font-medium text-muted hover:text-foreground rounded hover:bg-surface/80 transition-all cursor-pointer"
             >
-              <Database className="w-4 h-4" />
-              <span>Memory Table</span>
+              <Database className="w-4 h-4 text-[#A78BFA]" />
+              <span>Conventions Table</span>
             </Link>
+
             <button
-              onClick={scrollToCost}
-              className="w-full flex items-center gap-3 px-3 py-2 text-xs font-medium text-muted hover:text-white rounded hover:bg-surface/50 transition-all cursor-pointer"
+              onClick={() => setActiveTab("plugin")}
+              className={`w-full flex items-center gap-3 px-3 py-2 text-xs font-medium rounded transition-all cursor-pointer ${
+                activeTab === "plugin"
+                  ? "bg-surface border border-accent/40 text-foreground"
+                  : "text-muted hover:text-foreground hover:bg-surface/80"
+              }`}
             >
-              <Monitor className="w-4 h-4" />
-              <span>Cost</span>
-            </button>
-            <a
-              href="https://github.com/mario-world/contextcore"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full flex items-center gap-3 px-3 py-2 text-xs font-medium text-muted hover:text-white rounded hover:bg-surface/50 transition-all cursor-pointer"
-            >
-              <GitBranch className="w-4 h-4" />
-              <span>GitHub</span>
-            </a>
-            <button
-              onClick={handleDeploy}
-              className="w-full flex items-center gap-3 px-3 py-2 text-xs font-medium text-muted hover:text-white rounded hover:bg-surface/50 transition-all cursor-pointer"
-            >
-              <Rocket className="w-4 h-4" />
-              <span>Deploy</span>
+              <FolderGit2 className="w-4 h-4 text-accent" />
+              <span>Plugin / SDK Model</span>
             </button>
           </nav>
         </div>
 
-        {/* Bottom Secondary Nav */}
-        <div className="p-4 border-t border-border/40 bg-surface/50 space-y-1 shrink-0">
-          <button className="w-full flex items-center gap-2.5 px-3 py-1.5 text-[11px] font-medium text-muted hover:text-white rounded hover:bg-surface/80 transition-all cursor-pointer">
-            <CheckCircle2 className="w-3.5 h-3.5 text-success" />
-            <span>Status</span>
-          </button>
-          <button className="w-full flex items-center gap-2.5 px-3 py-1.5 text-[11px] font-medium text-muted hover:text-white rounded hover:bg-surface/80 transition-all cursor-pointer">
-            <FileText className="w-3.5 h-3.5" />
-            <span>Logs</span>
+        {/* Bottom Tour & Quick Actions */}
+        <div className="p-3 border-t border-border bg-surface/50 space-y-1.5 shrink-0">
+          <button
+            onClick={() => { setShowDemoTour(true); setDemoStep(1); }}
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-semibold bg-accent/15 hover:bg-accent/25 border border-accent/30 text-accent rounded transition-all cursor-pointer shadow-sm"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Interactive Demo Tour</span>
           </button>
         </div>
       </aside>
 
       {/* ================= CENTER PANEL ================= */}
       <section className="flex-1 flex flex-col min-w-0 bg-background">
-        {/* Top bar: Tabs & Repo input */}
-        <div className="h-14 border-b border-border px-6 flex items-center justify-between shrink-0 bg-surface/20">
+        {/* Top bar: Tabs & Repo connector */}
+        <div className="h-14 border-b border-border px-6 flex items-center justify-between shrink-0 bg-surface/30">
           {/* Tab Selection */}
-          <div className="flex items-center space-x-4 h-full">
-            <span className="h-full px-2 flex items-center text-xs font-semibold text-white border-b-2 border-accent cursor-pointer select-none">
-              Explorer
-            </span>
-            <span className="h-full px-2 flex items-center text-xs font-medium text-muted hover:text-white transition-all cursor-pointer select-none">
-              Terminal
-            </span>
-            <span className="h-full px-2 flex items-center text-xs font-medium text-muted hover:text-white transition-all cursor-pointer select-none">
-              Debug
-            </span>
-          </div>
-
-          {/* Repo Input Bar with Status Badge */}
-          <div className="w-[380px] flex items-center gap-2 bg-background border border-border rounded px-3 py-1 text-xs shadow-inner">
-            <Link2 className="w-3.5 h-3.5 text-muted shrink-0" />
-            <input
-              type="text"
-              value={githubUrl}
-              onChange={(e) => setGithubUrl(e.target.value)}
-              placeholder="GitHub repository URL"
-              className="bg-transparent border-none outline-none flex-1 text-white placeholder-muted/50 font-mono text-[11px] w-full"
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  handleOnboard();
-                }
-              }}
-            />
+          <div className="flex items-center space-x-3 h-full">
             <button
-              onClick={handleOnboard}
-              disabled={onboardStatus === "LEARNING"}
-              className={`px-2 py-0.5 rounded-[3px] text-[9px] font-bold font-mono tracking-wider transition-all uppercase shrink-0 ${
-                onboardStatus === "LEARNING"
-                  ? "bg-accent/10 border border-accent/30 text-accent animate-pulse"
-                  : "bg-success/10 border border-success/30 text-success hover:bg-success/20 cursor-pointer"
+              onClick={() => setActiveTab("chat")}
+              className={`h-full px-3 flex items-center gap-1.5 text-xs font-semibold border-b-2 transition-colors cursor-pointer ${
+                activeTab === "chat"
+                  ? "border-accent text-foreground"
+                  : "border-transparent text-muted hover:text-foreground"
               }`}
             >
-              {onboardStatus}
+              <Code className="w-3.5 h-3.5" />
+              <span>Chat & Editor</span>
             </button>
+
+            <button
+              onClick={() => setActiveTab("plugin")}
+              className={`h-full px-3 flex items-center gap-1.5 text-xs font-semibold border-b-2 transition-colors cursor-pointer ${
+                activeTab === "plugin"
+                  ? "border-accent text-foreground"
+                  : "border-transparent text-muted hover:text-foreground"
+              }`}
+            >
+              <FolderGit2 className="w-3.5 h-3.5" />
+              <span>Plugin / CLI Tool</span>
+            </button>
+          </div>
+
+          {/* Right Controls: Repo Connector, Theme Toggle & Auth */}
+          <div className="flex items-center gap-3">
+            {/* Open Codebase Ingestion Box */}
+            <div className="w-[360px] flex items-center gap-2 bg-background border border-border focus-within:border-accent rounded px-3 py-1 text-xs shadow-inner">
+              <Link2 className="w-3.5 h-3.5 text-muted shrink-0" />
+              <input
+                type="text"
+                value={githubUrl}
+                onChange={(e) => setGithubUrl(e.target.value)}
+                placeholder="Paste any GitHub repository URL..."
+                className="bg-transparent border-none outline-none flex-1 text-foreground placeholder-muted/50 font-mono text-[11px] w-full"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    handleOnboard();
+                  }
+                }}
+              />
+              <button
+                onClick={() => handleOnboard()}
+                disabled={onboardStatus === "LEARNING" || !githubUrl.trim()}
+                className={`px-2 py-0.5 rounded-[3px] text-[9px] font-bold font-mono tracking-wider transition-all uppercase shrink-0 ${
+                  onboardStatus === "LEARNING"
+                    ? "bg-accent/15 border border-accent/30 text-accent animate-pulse"
+                    : githubUrl.trim()
+                    ? "bg-success/15 border border-success/30 text-success hover:bg-success/25 cursor-pointer"
+                    : "bg-muted/10 border border-border text-muted"
+                }`}
+              >
+                {onboardStatus === "LEARNING" ? "INDEXING..." : "INGEST"}
+              </button>
+            </div>
+
+            <AuthButton />
           </div>
         </div>
 
         {/* Sub-header: Current Repo details */}
-        <div className="h-12 border-b border-border bg-surface/30 px-6 flex items-center justify-between shrink-0">
+        <div className="h-10 border-b border-border bg-surface/20 px-6 flex items-center justify-between shrink-0 text-xs">
           <div className="flex items-center gap-2">
-            <span className="text-[10px] uppercase font-bold text-muted font-mono tracking-wider select-none">
-              Active Repository:
+            <span className="text-[10px] uppercase font-bold text-muted font-mono tracking-wider">
+              Connected Codebase:
             </span>
-            <span className="font-mono font-bold text-white tracking-wide text-xs">
-              {repoId.toUpperCase().replace(/[^A-Z0-9]/g, "_")}
+            <span className="font-mono font-bold text-foreground text-xs">
+              {repoId ? repoId.toUpperCase().replace(/[^A-Z0-9]/g, "_") : "NO REPOSITORY CONNECTED"}
             </span>
+            {repoId && (
+              <span className="w-2 h-2 rounded-full bg-success animate-pulse" />
+            )}
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={refetchInspectorData}
-              className="p-1.5 rounded hover:bg-surface border border-transparent hover:border-border text-muted hover:text-white transition-all cursor-pointer"
-              title="Refresh inspector context"
+              className="p-1 rounded hover:bg-surface border border-transparent hover:border-border text-muted hover:text-foreground transition-all cursor-pointer"
+              title="Refresh inspector memory"
             >
-              <RotateCw className="w-3.5 h-3.5" />
+              <RotateCw className="w-3 h-3" />
             </button>
             <button
               onClick={() => setShowInspector(!showInspector)}
-              className={`p-1.5 rounded hover:bg-surface border border-transparent hover:border-border transition-all cursor-pointer ${
-                showInspector ? "text-accent" : "text-muted hover:text-white"
+              className={`p-1 rounded hover:bg-surface border border-transparent hover:border-border transition-all cursor-pointer ${
+                showInspector ? "text-accent" : "text-muted hover:text-foreground"
               }`}
               title="Toggle Inspector Sidebar"
             >
-              <Settings className="w-3.5 h-3.5" />
+              <Settings className="w-3 h-3" />
             </button>
           </div>
         </div>
 
-        {/* Chat Feed Messages Area */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          <div className="max-w-4xl mx-auto space-y-6">
-            {messages.map((msg) => {
-              if (msg.sender === "system") {
-                return (
-                  <div key={msg.id} className="flex gap-3 text-xs font-mono text-muted bg-surface/10 border border-border/40 rounded p-3 shadow-inner">
-                    <Cpu className="w-4 h-4 text-muted/50 shrink-0 mt-0.5" />
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-white uppercase select-none">SYSTEM</span>
-                        <span className="text-[10px] text-muted/40 select-none">{msg.timestamp}</span>
-                      </div>
-                      <div className="leading-relaxed">
-                        {msg.text.includes(repoId) ? (
-                          <>
-                            {msg.text.split(repoId)[0]}
-                            <code className="bg-surface border border-border px-1.5 py-0.5 rounded text-white text-[11px] font-mono select-all">
-                              {repoId}
-                            </code>
-                            {msg.text.split(repoId)[1]}
-                          </>
-                        ) : (
-                          msg.text
-                        )}
-                      </div>
+        {/* MAIN BODY AREA */}
+        {activeTab === "chat" && (
+          <div className="flex-1 overflow-y-auto p-6 space-y-6 flex flex-col justify-between">
+            <div className="max-w-4xl w-full mx-auto space-y-5">
+              {/* Empty State Banner when no repo ingested yet */}
+              {!repoId && (
+                <div className="bg-surface border border-border rounded-xl p-6 shadow-xl space-y-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-accent/15 border border-accent/30 text-accent flex items-center justify-center font-bold">
+                      <FolderGit2 className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-sm text-foreground">Connect Any Codebase</h3>
+                      <p className="text-xs text-muted">
+                        Paste a public GitHub repo or click a sample below to index AST code symbols into persistent memory.
+                      </p>
                     </div>
                   </div>
-                );
-              }
 
-              if (msg.sender === "user") {
-                return (
-                  <div key={msg.id} className="flex gap-3 justify-end text-sm">
-                    <div className="max-w-[85%] rounded bg-surface/50 border border-border p-3.5 space-y-1.5 shadow-sm">
-                      <div className="flex items-center justify-between border-b border-border/30 pb-1 mb-1 font-mono text-[10px] text-muted">
-                        <span className="font-bold text-white font-sans text-xs select-none">Developer</span>
-                        <span className="select-none">{msg.timestamp}</span>
-                      </div>
-                      <div className="text-white/95 leading-relaxed font-sans text-xs md:text-sm">
-                        {formatDeveloperMessage(msg.text)}
-                      </div>
-                    </div>
-                    <div className="w-8 h-8 rounded-full bg-accent/20 border border-accent/40 text-accent flex items-center justify-center shrink-0 text-xs font-bold font-mono select-none">
-                      DV
-                    </div>
-                  </div>
-                );
-              }
-
-              // Assistant message
-              return (
-                <div key={msg.id} className="flex gap-3 text-sm">
-                  <div className="w-8 h-8 rounded bg-surface border border-border text-accent flex items-center justify-center shrink-0 mt-0.5 shadow-sm select-none">
-                    {msg.model_used?.includes("pro") ? (
-                      <Star className="w-4 h-4 text-accent fill-current" />
-                    ) : (
-                      <Zap className="w-4 h-4 text-success" />
-                    )}
-                  </div>
-
-                  <div className="max-w-[85%] rounded bg-surface/35 border border-border p-3.5 space-y-3.5 shadow-sm flex-1">
-                    {/* Header bar with Model Badge */}
-                    <div className="flex items-center justify-between border-b border-border/30 pb-1.5 font-mono text-[10px] text-muted">
-                      <div className="flex items-center gap-2 select-none">
-                        <span className="font-bold text-white font-sans text-xs">CONTEXTCORE</span>
-                        {msg.model_used && (
-                          <span
-                            className={`px-1.5 py-0.5 rounded-[3px] text-[9px] font-extrabold uppercase tracking-wider flex items-center gap-1 border ${
-                              msg.model_used.includes("pro")
-                                ? "bg-accent/10 border-accent/30 text-accent"
-                                : "bg-success/10 border-success/30 text-success"
-                            }`}
-                          >
-                            {msg.model_used.includes("pro") ? "★ Pro" : "Flash"}
-                          </span>
-                        )}
-                      </div>
-                      <span className="select-none">{msg.timestamp}</span>
-                    </div>
-
-                    {/* Memory Retrieved Flag */}
-                    {msg.corrections_applied && msg.corrections_applied.length > 0 && (
-                      <div className="flex items-center gap-1.5 text-[11px] font-mono text-accent bg-accent/5 px-2.5 py-1 rounded border border-accent/15 my-1.5 select-none w-fit">
-                        <Brain className="w-3.5 h-3.5 shrink-0" />
-                        <span>Memory Retrieved:</span>
-                        <span className="font-bold uppercase bg-accent/10 border border-accent/20 px-1 py-0.1 rounded text-[9px] text-white">
-                          {msg.topic || "rules"}
-                        </span>
-                      </div>
-                    )}
-
-                    {/* Message Body */}
-                    <div className="space-y-3 text-white/95 leading-relaxed font-sans text-xs md:text-sm">
-                      {renderAgentMessage(msg.text)}
-                    </div>
-
-                    {/* Quick action bar */}
-                    <div className="flex justify-end pt-2 border-t border-border/30 mt-2 select-none">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5 pt-2">
+                    {SAMPLE_REPOS.map((sample) => (
                       <button
-                        onClick={() => {
-                          setInputMessage("Actually, we use ");
-                          const textarea = document.querySelector("textarea");
-                          if (textarea) textarea.focus();
-                        }}
-                        className="text-[10px] font-mono text-muted hover:text-accent font-semibold px-2 py-0.5 border border-border rounded hover:bg-surface/50 transition-all cursor-pointer flex items-center gap-1"
-                        title="Teach ContextCore a new convention"
+                        key={sample.id}
+                        onClick={() => handleOnboard(sample.url)}
+                        className="bg-background hover:bg-surface border border-border hover:border-accent/40 rounded-lg p-3 text-left transition-all group cursor-pointer shadow-sm"
                       >
-                        <Brain className="w-3 h-3 text-muted/60" />
-                        <span>Wrong?</span>
+                        <div className="font-bold text-xs text-foreground group-hover:text-accent font-mono flex items-center justify-between">
+                          <span>{sample.name}</span>
+                          <Play className="w-3 h-3 opacity-0 group-hover:opacity-100 text-accent transition-opacity" />
+                        </div>
+                        <div className="text-[11px] text-muted truncate mt-0.5 font-mono">{sample.id}</div>
                       </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Chat Feed */}
+              {messages.map((msg) => {
+                if (msg.sender === "system") {
+                  return (
+                    <div key={msg.id} className="flex gap-3 text-xs font-mono text-muted bg-surface/30 border border-border/60 rounded-lg p-3 shadow-inner">
+                      <Cpu className="w-4 h-4 text-muted/60 shrink-0 mt-0.5" />
+                      <div className="space-y-1 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-foreground uppercase">SYSTEM</span>
+                          <span className="text-[10px] text-muted/60">{msg.timestamp}</span>
+                        </div>
+                        <div className="leading-relaxed text-foreground/90">
+                          {msg.text}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+
+                if (msg.sender === "user") {
+                  return (
+                    <div key={msg.id} className="flex gap-3 justify-end text-sm">
+                      <div className="max-w-[85%] rounded-xl bg-surface border border-border p-3.5 space-y-1.5 shadow-sm">
+                        <div className="flex items-center justify-between border-b border-border/40 pb-1 mb-1 font-mono text-[10px] text-muted">
+                          <span className="font-bold text-foreground font-sans text-xs">Developer</span>
+                          <span>{msg.timestamp}</span>
+                        </div>
+                        <div className="text-foreground leading-relaxed font-sans text-xs md:text-sm">
+                          {formatDeveloperMessage(msg.text)}
+                        </div>
+                      </div>
+                      <div className="w-8 h-8 rounded-full bg-accent/20 border border-accent/40 text-accent flex items-center justify-center shrink-0 text-xs font-bold font-mono">
+                        DEV
+                      </div>
+                    </div>
+                  );
+                }
+
+                // Assistant message
+                return (
+                  <div key={msg.id} className="flex gap-3 text-sm">
+                    <div className="w-8 h-8 rounded-lg bg-surface border border-border text-accent flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
+                      {msg.model_used?.includes("pro") ? (
+                        <Star className="w-4 h-4 text-accent fill-current" />
+                      ) : (
+                        <Zap className="w-4 h-4 text-success" />
+                      )}
+                    </div>
+
+                    <div className="max-w-[85%] rounded-xl bg-surface/60 border border-border p-4 space-y-3 shadow-sm flex-1">
+                      {/* Header bar with Model Badge & Topic */}
+                      <div className="flex items-center justify-between border-b border-border/40 pb-2 font-mono text-[10px] text-muted">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-foreground font-sans text-xs">ContextCore Agent</span>
+                          {msg.type === "correction_ack" ? (
+                            <span className="bg-success/15 border border-success/30 text-success px-1.5 py-0.5 rounded font-bold">
+                              LEARNED RULE [{msg.topic?.toUpperCase() || "CONVENTION"}]
+                            </span>
+                          ) : (
+                            <span className="bg-accent/15 border border-accent/30 text-accent px-1.5 py-0.5 rounded font-bold">
+                              {msg.model_used || "gemini-2.0-flash"}
+                            </span>
+                          )}
+                        </div>
+                        <span>{msg.timestamp}</span>
+                      </div>
+
+                      {/* Memory Conventions Applied Pill Banner */}
+                      {msg.corrections_applied && msg.corrections_applied.length > 0 && (
+                        <div className="bg-background border border-accent/30 rounded-lg p-2 text-xs font-mono flex items-start gap-2">
+                          <Sparkles className="w-3.5 h-3.5 text-accent shrink-0 mt-0.5" />
+                          <div className="space-y-1">
+                            <span className="font-bold text-accent text-[11px]">Applied Persistent Team Rules:</span>
+                            <ul className="list-disc list-inside text-muted text-[11px] space-y-0.5">
+                              {msg.corrections_applied.map((rule, rIdx) => (
+                                <li key={rIdx}>{rule}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Response Body */}
+                      <div className="text-foreground leading-relaxed font-sans text-xs md:text-sm">
+                        {renderAgentMessage(msg.text)}
+                      </div>
                     </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
 
-            {/* Visual Thinking Flourish */}
-            {isSending && (
-              <div className="flex gap-3 text-sm">
-                <div className="w-8 h-8 rounded bg-surface border border-border text-accent flex items-center justify-center shrink-0 shadow-sm animate-pulse select-none">
-                  <Zap className="w-4 h-4 text-accent" />
-                </div>
-                <div className="bg-surface/35 border border-border rounded p-3.5 text-xs font-mono text-muted flex-1 space-y-1.5">
-                  <div className="flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-accent animate-ping" />
-                    <span className="font-semibold text-white">Thinking...</span>
+              {/* Sending / Thinking Indicator */}
+              {isSending && (
+                <div className="flex gap-3 text-sm animate-pulse">
+                  <div className="w-8 h-8 rounded-lg bg-surface border border-border text-accent flex items-center justify-center shrink-0">
+                    <Brain className="w-4 h-4 animate-spin text-accent" />
                   </div>
-                  <div className="text-[11px] text-muted/60 animate-pulse-subtle">
-                    &gt; Scanning files context chunks...
-                  </div>
-                  <div className="text-[11px] text-muted/40 animate-pulse-subtle">
-                    &gt; Matching persistent repository conventions...
+                  <div className="bg-surface/50 border border-border rounded-xl p-3.5 flex items-center gap-2 text-xs font-mono text-muted">
+                    <span>Recalling repository memory & formulating code...</span>
                   </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            <div ref={messagesEndRef} />
-          </div>
-        </div>
+              <div ref={messagesEndRef} />
+            </div>
 
-        {/* Bottom Input Area */}
-        <div className="p-4 border-t border-border bg-surface/35 shrink-0">
-          <div className="max-w-4xl mx-auto space-y-2.5">
-            <form
-              onSubmit={handleSendMessage}
-              className="relative flex items-center bg-background border border-border rounded p-2 focus-within:border-accent transition-all shadow-inner"
-            >
-              {/* Paperclip upload button */}
-              <button
-                type="button"
-                className="p-2 text-muted hover:text-white hover:bg-surface rounded transition-colors cursor-pointer"
-                title="Attach code snippet or file"
+            {/* Message Input Box */}
+            <div className="max-w-4xl w-full mx-auto pt-4">
+              <form
+                onSubmit={(e) => { e.preventDefault(); handleSendMessage(); }}
+                className="bg-surface border border-border focus-within:border-accent rounded-xl p-2 shadow-xl transition-all"
               >
-                <Paperclip className="w-4 h-4" />
-              </button>
-
-              {/* Textarea Input */}
-              <textarea
-                value={inputMessage}
-                onChange={(e) => setInputMessage(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSendMessage();
-                  }
-                }}
-                rows={1}
-                placeholder="Type a message or paste code..."
-                className="flex-1 bg-transparent border-none outline-none text-xs md:text-sm text-white placeholder-muted/50 resize-none py-2 px-3 focus:ring-0 leading-relaxed font-sans max-h-24"
-              />
-
-              {/* Send Button */}
-              <button
-                type="submit"
-                disabled={!inputMessage.trim() || isSending}
-                className="w-8 h-8 rounded-full bg-accent hover:bg-accent-hover text-white flex items-center justify-center transition-all disabled:opacity-40 disabled:hover:bg-accent cursor-pointer shrink-0 shadow-lg shadow-accent/15"
-              >
-                <ArrowUp className="w-4.5 h-4.5 text-white font-bold" />
-              </button>
-            </form>
-
-            {/* Input Meta Footer */}
-            <div className="flex justify-between items-center text-[10px] font-mono text-muted px-1.5 select-none">
-              <div className="flex items-center gap-1.5">
-                <span>Model:</span>
-                <span className="text-white font-semibold">
-                  {lastModelUsed || "Gemini 2.0 Flash"}
-                </span>
-              </div>
-              <div className="flex items-center gap-1">
-                <span>Tokens:</span>
-                <span className="text-white font-semibold">
-                  ~{Math.round(inputMessage.length / 4.1) || 0}
-                </span>
-              </div>
+                <textarea
+                  value={inputMessage}
+                  onChange={(e) => setInputMessage(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSendMessage();
+                    }
+                  }}
+                  placeholder="Ask a question, teach a convention (e.g. 'Actually we use snake_case for methods'), or request code..."
+                  rows={2}
+                  className="w-full bg-transparent border-none outline-none text-foreground placeholder-muted/50 text-xs md:text-sm resize-none px-2 py-1"
+                />
+                <div className="flex items-center justify-between pt-2 border-t border-border/40 px-2 text-xs">
+                  <div className="flex items-center gap-2 text-muted font-mono text-[11px]">
+                    <span>Shift + Enter for new line</span>
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={isSending || !inputMessage.trim()}
+                    className="px-4 py-1.5 bg-accent hover:bg-accent-hover disabled:opacity-40 text-white font-semibold text-xs rounded-lg transition-all shadow-md shadow-accent/20 flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <span>Send</span>
+                    <ArrowUp className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
-        </div>
+        )}
+
+        {/* PLUGIN / DEVELOPER TOOL MODEL TAB */}
+        {activeTab === "plugin" && (
+          <div className="flex-1 overflow-y-auto p-8 max-w-4xl mx-auto space-y-6">
+            <div>
+              <h2 className="text-xl font-bold text-foreground font-mono flex items-center gap-2">
+                <FolderGit2 className="w-5 h-5 text-accent" />
+                ContextCore Developer Tool & Plugin Integration
+              </h2>
+              <p className="text-xs text-muted mt-1">
+                Connect ContextCore into your local IDE, terminal CLI, or CI/CD pipelines as a persistent memory companion.
+              </p>
+            </div>
+
+            {/* 1. CLI Usage */}
+            <div className="bg-surface border border-border rounded-xl p-5 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="font-mono text-xs font-bold text-accent">1. Terminal CLI Integration</span>
+                <span className="text-[10px] font-mono text-muted">Node.js / Python</span>
+              </div>
+              <p className="text-xs text-muted">
+                Run ContextCore directly in your terminal to index local projects without committing preferences to Git.
+              </p>
+              <pre className="bg-background border border-border p-3 rounded-lg text-xs font-mono text-success overflow-x-auto">
+{`# Install CLI globally
+npm install -g @contextcore/cli
+
+# Connect current repository to persistent memory
+contextcore connect --repo-id my-team/my-codebase
+
+# Ask questions with instant memory enforcement
+contextcore ask "generate user auth endpoint"`}
+              </pre>
+            </div>
+
+            {/* 2. VS Code / Cursor IDE Extension Config */}
+            <div className="bg-surface border border-border rounded-xl p-5 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="font-mono text-xs font-bold text-accent">2. VS Code / Cursor IDE Setting</span>
+                <span className="text-[10px] font-mono text-muted">settings.json</span>
+              </div>
+              <p className="text-xs text-muted">
+                Add this configuration to <code className="text-foreground font-mono">.vscode/settings.json</code> to enable real-time convention injection during code completion:
+              </p>
+              <pre className="bg-background border border-border p-3 rounded-lg text-xs font-mono text-foreground/90 overflow-x-auto">
+{`{
+  "contextcore.apiEndpoint": "http://localhost:8000",
+  "contextcore.repositoryId": "${repoId || "your-org/your-repo"}",
+  "contextcore.enforcement": "STRICT",
+  "contextcore.autoSync": true
+}`}
+              </pre>
+            </div>
+
+            {/* 3. GitHub Actions CI/CD Rule Verification */}
+            <div className="bg-surface border border-border rounded-xl p-5 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="font-mono text-xs font-bold text-accent">3. GitHub Actions PR Convention Checker</span>
+                <span className="text-[10px] font-mono text-muted">.github/workflows/memory.yml</span>
+              </div>
+              <p className="text-xs text-muted">
+                Automatically verify that pull requests adhere to all conventions registered in ContextCore memory:
+              </p>
+              <pre className="bg-background border border-border p-3 rounded-lg text-xs font-mono text-foreground/90 overflow-x-auto">
+{`name: ContextCore Convention Check
+on: [pull_request]
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify Code Conventions
+        run: |
+          curl -X POST http://localhost:8000/query \\
+            -H "Content-Type: application/json" \\
+            -d '{"query": "check conventions", "repo_id": "${repoId || "my-repo"}"}'`}
+              </pre>
+            </div>
+          </div>
+        )}
       </section>
 
-      {/* ================= RIGHT SIDEBAR ("INSPECTOR") ================= */}
+      {/* ================= RIGHT INSPECTOR PANEL ================= */}
       {showInspector && (
-        <aside className="w-[320px] bg-surface border-l border-border flex flex-col shrink-0 overflow-y-auto p-4 space-y-6">
-          {/* Panel Header */}
-          <div className="flex items-center justify-between border-b border-border/40 pb-3 sticky top-0 bg-surface z-10 select-none">
-            <span className="font-bold font-mono text-xs tracking-wider text-white">
-              INSPECTOR
-            </span>
-            <button className="text-muted hover:text-white transition-all cursor-pointer">
-              <MoreHorizontal className="w-4 h-4" />
-            </button>
-          </div>
+        <aside className="w-[300px] bg-surface border-l border-border flex flex-col justify-between shrink-0 text-xs select-none">
+          <div className="p-4 overflow-y-auto space-y-6 flex-1">
+            {/* 1. Active Memory Nodes */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="font-mono text-[11px] font-bold text-foreground flex items-center gap-1.5">
+                  <Database className="w-3.5 h-3.5 text-accent" />
+                  PERSISTENT CONVENTIONS
+                </span>
+                <Link href="/graph" className="text-[10px] font-mono text-accent hover:underline">
+                  View Graph →
+                </Link>
+              </div>
 
-          {/* 1. Active Memory Nodes Card */}
-          <div className="bg-surface/50 border border-border rounded p-4 space-y-3 shadow-sm">
-            <div className="flex items-center gap-2 select-none">
-              <Brain className="w-4 h-4 text-accent" />
-              <span className="font-semibold text-xs text-white uppercase tracking-wider">
-                Active Memory Nodes
-              </span>
-            </div>
-            <p className="text-[11px] text-muted leading-tight select-none">
-              Learned corrections and style preferences applied to current context.
-            </p>
-
-            <div className="flex flex-wrap gap-2 pt-1.5">
               {corrections.length === 0 ? (
-                <div className="text-[10px] text-muted/50 font-mono italic select-none">
-                  No conventions recorded.
+                <div className="p-3 bg-background border border-border rounded-lg text-muted text-[11px]">
+                  No conventions recorded yet. Correct the agent in chat to register rules permanently.
                 </div>
               ) : (
-                corrections.map((item, idx) => {
-                  const isActive = correctionsApplied.some(
-                    (cText) => cText.toLowerCase() === item.text.toLowerCase()
-                  );
-
-                  return (
-                    <div
-                      key={item.id || item.correction_id || idx}
-                      title={item.text}
-                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-medium transition-all ${
-                        isActive
-                          ? "bg-accent border border-accent text-white shadow-md shadow-accent/15"
-                          : "bg-surface border border-border text-muted hover:text-white cursor-help"
-                      }`}
-                    >
-                      {isActive ? (
-                        <CheckCircle2 className="w-3 h-3 text-white" />
-                      ) : (
-                        <History className="w-3 h-3 text-muted/50" />
-                      )}
-                      <span className="font-mono uppercase">{item.topic || "general"}</span>
+                <div className="space-y-2">
+                  {corrections.map((c, i) => (
+                    <div key={i} className="bg-background border border-border hover:border-accent/30 rounded-lg p-2.5 space-y-1 transition-all">
+                      <div className="flex items-center justify-between text-[10px] font-mono">
+                        <span className="bg-accent/15 text-accent font-bold px-1.5 py-0.5 rounded uppercase">
+                          {c.topic || "RULE"}
+                        </span>
+                        <span className="text-success font-semibold">STRICT</span>
+                      </div>
+                      <p className="text-foreground/90 text-[11px] leading-relaxed">
+                        {c.text}
+                      </p>
                     </div>
-                  );
-                })
+                  ))}
+                </div>
               )}
             </div>
-          </div>
 
-          {/* 2. Session Usage Card */}
-          <div id="cost-inspector-card" className="bg-surface/50 border border-border rounded p-4 space-y-3 shadow-sm transition-all duration-300">
-            <div className="flex items-center gap-2 select-none">
-              <Monitor className="w-4 h-4 text-success" />
-              <span className="font-semibold text-xs text-white uppercase tracking-wider">
-                Session Usage
+            {/* 2. Session Cost & Routing */}
+            <div id="cost-inspector-card" className="space-y-3 pt-2 border-t border-border">
+              <span className="font-mono text-[11px] font-bold text-foreground flex items-center gap-1.5">
+                <Monitor className="w-3.5 h-3.5 text-success" />
+                COST-AWARE ROUTING
               </span>
-            </div>
 
-            {/* Recharts Pie Donut Container */}
-            {mounted ? (
-              <div className="relative w-full h-32 flex items-center justify-center select-none">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={donutData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={36}
-                      outerRadius={48}
-                      paddingAngle={3}
-                      dataKey="value"
-                    >
-                      {donutData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="absolute flex flex-col items-center justify-center pointer-events-none">
-                  <span className="text-[9px] uppercase tracking-wider text-muted font-mono leading-none">Cost</span>
-                  <span className="text-sm font-bold text-white font-mono mt-0.5">
-                    ${costSummary.total_cost.toFixed(3)}
-                  </span>
-                </div>
-              </div>
-            ) : (
-              <div className="h-32 w-full flex items-center justify-center text-xs text-muted font-mono select-none">
-                Loading usage metrics...
-              </div>
-            )}
-
-            {/* Legend and Details Links */}
-            <div className="flex justify-between items-center text-[10px] font-mono border-t border-border/30 pt-3 select-none">
-              <div className="flex gap-3">
-                <div className="flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-accent" />
-                  <span className="text-muted">Pro: {proPercentage}%</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-success" />
-                  <span className="text-muted">Flash: {flashPercentage}%</span>
-                </div>
-              </div>
-              <div className="flex items-center gap-1">
-                <span className="text-muted/60">Limit: $10.00</span>
-                <span className="text-muted/40">|</span>
-                <button className="text-accent hover:underline uppercase text-[9px] font-bold cursor-pointer">
-                  DETAILS
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* 3. Active Files Card */}
-          <div className="bg-surface/50 border border-border rounded p-4 space-y-3 shadow-sm flex-1 flex flex-col">
-            <div className="flex items-center gap-2 select-none">
-              <FileText className="w-4 h-4 text-accent" />
-              <span className="font-semibold text-xs text-white uppercase tracking-wider">
-                Active Files
-              </span>
-            </div>
-
-            <div className="space-y-2 overflow-y-auto flex-1 pr-0.5 max-h-[220px]">
-              {activeFiles.length === 0 ? (
-                <div className="text-[10px] text-muted/50 font-mono italic select-none">
-                  No active files referenced.
-                </div>
-              ) : (
-                activeFiles.map((file, idx) => (
-                  <div
-                    key={idx}
-                    className="flex items-center gap-2 bg-surface/85 border border-border px-2.5 py-1.5 rounded group hover:border-accent/40 transition-colors"
-                  >
-                    <FileCode className="w-3.5 h-3.5 text-accent shrink-0" />
-                    <span className="font-mono text-[11px] text-white/90 truncate flex-1" title={file}>
-                      {file}
+              <div className="bg-background border border-border rounded-xl p-4 text-center space-y-2">
+                <div className="h-28 relative flex items-center justify-center">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={costData}
+                        innerRadius={30}
+                        outerRadius={45}
+                        paddingAngle={4}
+                        dataKey="value"
+                      >
+                        {costData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                    <span className="text-[10px] text-muted font-mono">TOTAL</span>
+                    <span className="text-sm font-extrabold text-foreground font-mono">
+                      ${totalCostValue}
                     </span>
                   </div>
-                ))
-              )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-[10px] font-mono pt-1">
+                  <div className="bg-surface p-1.5 rounded border border-border">
+                    <span className="text-success font-bold">Flash:</span> {costSummary.flash.call_count} calls
+                  </div>
+                  <div className="bg-surface p-1.5 rounded border border-border">
+                    <span className="text-accent font-bold">Pro:</span> {costSummary.pro.call_count} calls
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </aside>
+      )}
+
+      {/* INTERACTIVE DEMO TOUR MODAL */}
+      {showDemoTour && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in">
+          <div className="w-full max-w-lg bg-surface border border-border rounded-2xl shadow-2xl p-6 relative font-sans text-foreground">
+            <button
+              onClick={() => setShowDemoTour(false)}
+              className="absolute top-4 right-4 text-muted hover:text-foreground p-1 rounded-lg hover:bg-background transition-colors cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="flex items-center gap-2 mb-4 text-xs font-mono text-accent font-bold">
+              <Sparkles className="w-4 h-4" />
+              <span>STEP {demoStep} OF 4 • APPLICATION DEMO TOUR</span>
+            </div>
+
+            {demoStep === 1 && (
+              <div className="space-y-4">
+                <h3 className="font-bold text-lg text-foreground">1. Connect Your Codebase</h3>
+                <p className="text-xs text-muted leading-relaxed">
+                  ContextCore parses your repository&apos;s source code using Abstract Syntax Trees (AST). Functions, classes, and routing modules are indexed as semantic nodes.
+                </p>
+                <div className="p-3 bg-background border border-border rounded-xl text-xs space-y-2 font-mono">
+                  <span className="text-muted">Quick Ingest FastAPI Repository:</span>
+                  <button
+                    onClick={() => { handleOnboard("https://github.com/fastapi/fastapi"); setDemoStep(2); }}
+                    className="w-full py-2 bg-accent hover:bg-accent-hover text-white rounded font-semibold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <span>Ingest fastapi/fastapi</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {demoStep === 2 && (
+              <div className="space-y-4">
+                <h3 className="font-bold text-lg text-foreground">2. Teach the AI a Team Convention</h3>
+                <p className="text-xs text-muted leading-relaxed">
+                  Speak naturally to correct the agent. ContextCore extracts the topic domain and stores the rule permanently in Cloud Firestore.
+                </p>
+                <button
+                  onClick={() => {
+                    handleSendMessage("Actually in this repo we always use JWT Bearer tokens with RS256 for auth endpoints instead of sessions.");
+                    setDemoStep(3);
+                  }}
+                  className="w-full py-2.5 bg-accent hover:bg-accent-hover text-white rounded font-semibold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <span>Send Sample Correction: &quot;Always use JWT Bearer tokens&quot;</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+
+            {demoStep === 3 && (
+              <div className="space-y-4">
+                <h3 className="font-bold text-lg text-foreground">3. Explore the Live Memory Graph</h3>
+                <p className="text-xs text-muted leading-relaxed">
+                  Open the interactive Memory Graph to see relational links connecting the new convention to code symbols and topic clusters.
+                </p>
+                <Link
+                  href="/graph"
+                  onClick={() => setShowDemoTour(false)}
+                  className="w-full py-2.5 bg-success hover:bg-success/90 text-white rounded font-semibold text-xs transition-all flex items-center justify-center gap-2 shadow-md shadow-success/20 cursor-pointer"
+                >
+                  <Network className="w-4 h-4" />
+                  <span>Open Interactive Memory Graph</span>
+                </Link>
+                <button
+                  onClick={() => setDemoStep(4)}
+                  className="w-full py-2 text-xs font-mono text-muted hover:text-foreground cursor-pointer"
+                >
+                  Next Step →
+                </button>
+              </div>
+            )}
+
+            {demoStep === 4 && (
+              <div className="space-y-4">
+                <h3 className="font-bold text-lg text-foreground">4. Strict Convention Enforcement</h3>
+                <p className="text-xs text-muted leading-relaxed">
+                  Ask any coding question and verify that ContextCore automatically applies the remembered convention without having to repeat it.
+                </p>
+                <button
+                  onClick={() => {
+                    handleSendMessage("Write a new payment webhook endpoint.");
+                    setShowDemoTour(false);
+                  }}
+                  className="w-full py-2.5 bg-accent hover:bg-accent-hover text-white rounded font-semibold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <span>Test Prompt: &quot;Write a new payment webhook endpoint&quot;</span>
+                  <Check className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );

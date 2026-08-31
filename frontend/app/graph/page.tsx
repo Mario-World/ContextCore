@@ -2,6 +2,9 @@
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import Link from "next/link";
+import Image from "next/image";
+import AuthButton from "@/components/AuthButton";
+import ThemeToggle from "@/components/ThemeToggle";
 import {
   Database,
   ArrowLeft,
@@ -520,6 +523,8 @@ export default function MemoryGraphPage() {
       ctx.scale(dpr, dpr);
       ctx.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr);
 
+      const isLight = typeof document !== "undefined" && document.documentElement.classList.contains("light");
+
       const { x: tx, y: ty, scale } = transformRef.current;
       ctx.save();
       ctx.translate(tx, ty);
@@ -533,7 +538,7 @@ export default function MemoryGraphPage() {
       const endX = startX + viewW + 200;
       const endY = startY + viewH + 200;
 
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.025)";
+      ctx.strokeStyle = isLight ? "rgba(0, 0, 0, 0.06)" : "rgba(255, 255, 255, 0.025)";
       ctx.lineWidth = 1 / scale;
       ctx.beginPath();
       for (let gx = Math.floor(startX / gridSize) * gridSize; gx < endX; gx += gridSize) {
@@ -561,7 +566,7 @@ export default function MemoryGraphPage() {
           (selectedNode && (src.id === selectedNode.id || tgt.id === selectedNode.id)) ||
           (hoveredNode && (src.id === hoveredNode.id || tgt.id === hoveredNode.id));
 
-        const opacity = isHighlighted ? 0.9 : isSrcVisible && isTgtVisible ? 0.4 : 0.06;
+        const opacity = isHighlighted ? 0.9 : isSrcVisible && isTgtVisible ? (isLight ? 0.6 : 0.4) : 0.06;
 
         ctx.strokeStyle = link.color.replace(/[\d\.]+\)$/g, `${opacity})`);
         ctx.lineWidth = isHighlighted ? 2.2 / scale : 1.2 / scale;
@@ -572,6 +577,7 @@ export default function MemoryGraphPage() {
         ctx.stroke();
       });
 
+      // Draw active traveling memory particles
       particlesRef.current.forEach((p) => {
         const link = links[p.linkIdx];
         if (!link) return;
@@ -580,8 +586,10 @@ export default function MemoryGraphPage() {
         if (src.x === undefined || src.y === undefined || tgt.x === undefined || tgt.y === undefined) return;
 
         if (filtered.has(src.id) || filtered.has(tgt.id)) {
-          p.progress += p.speed;
-          if (p.progress > 1) p.progress = 0;
+          if (isPhysicsRunning) {
+            p.progress += p.speed;
+            if (p.progress > 1) p.progress = 0;
+          }
 
           const px = src.x + (tgt.x - src.x) * p.progress;
           const py = src.y + (tgt.y - src.y) * p.progress;
@@ -593,15 +601,16 @@ export default function MemoryGraphPage() {
         }
       });
 
+      // Draw Nodes
       nodes.forEach((node) => {
         if (node.x === undefined || node.y === undefined) return;
 
-        const isVisible = filtered.has(node.id);
         const isSelected = selectedNode?.id === node.id;
         const isHovered = hoveredNode?.id === node.id;
+        const isVisible = filtered.has(node.id);
         const isDimmed = !isVisible;
 
-        const radius = Math.max(6, node.size);
+        const radius = (node.size || 16) / 2;
 
         ctx.save();
         ctx.globalAlpha = isDimmed ? 0.15 : 1;
@@ -624,17 +633,19 @@ export default function MemoryGraphPage() {
         ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
         ctx.fill();
 
-        ctx.strokeStyle = "rgba(255, 255, 255, 0.35)";
+        ctx.strokeStyle = isLight ? "rgba(0, 0, 0, 0.25)" : "rgba(255, 255, 255, 0.35)";
         ctx.lineWidth = 1.5 / scale;
         ctx.stroke();
 
         if (scale > 0.6 || isSelected || isHovered || node.type === "repo" || node.type === "topic") {
           ctx.font = `${Math.max(10, node.type === "repo" ? 13 : 11) / scale}px var(--font-mono, monospace)`;
-          ctx.fillStyle = isDimmed ? "rgba(255, 255, 255, 0.2)" : "#FFFFFF";
+          ctx.fillStyle = isDimmed
+            ? (isLight ? "rgba(0, 0, 0, 0.2)" : "rgba(255, 255, 255, 0.2)")
+            : (isLight ? "#0F172A" : "#FFFFFF");
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
 
-          ctx.shadowColor = "#000000";
+          ctx.shadowColor = isLight ? "rgba(255, 255, 255, 0.9)" : "#000000";
           ctx.shadowBlur = 4;
           ctx.fillText(node.label, node.x, node.y + radius + 14 / scale);
           ctx.shadowBlur = 0;
@@ -817,29 +828,39 @@ export default function MemoryGraphPage() {
   }, [rawNodes]);
 
   return (
-    <div className="min-h-screen bg-[#0A0A0B] text-[#F3F4F6] flex flex-col font-sans overflow-hidden select-none">
+    <div className="min-h-screen bg-background text-foreground flex flex-col font-sans overflow-hidden select-none">
       {/* Top Header & Navigation */}
-      <header className="h-14 border-b border-[#26262B] bg-[#121214]/95 backdrop-blur px-6 flex items-center justify-between shrink-0 z-30">
-        <div className="flex items-center gap-4">
+      <header className="h-14 border-b border-border bg-surface/90 backdrop-blur px-6 flex items-center justify-between shrink-0 z-30">
+        <div className="flex items-center gap-3">
+          <Link
+            href="/"
+            className="flex items-center gap-1.5 text-xs font-mono text-muted hover:text-foreground transition-colors bg-surface px-2.5 py-1.5 rounded border border-border"
+          >
+            <span>Home</span>
+          </Link>
           <Link
             href="/workspace"
-            className="flex items-center gap-1.5 text-xs font-mono text-[#9CA3AF] hover:text-white transition-colors bg-[#1A1A1E] px-2.5 py-1.5 rounded border border-[#26262B]"
+            className="flex items-center gap-1.5 text-xs font-mono text-muted hover:text-foreground transition-colors bg-surface px-2.5 py-1.5 rounded border border-border"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
             <span>Workspace</span>
           </Link>
-          <div className="h-4 w-[1px] bg-[#26262B]" />
+          <div className="h-4 w-[1px] bg-border" />
 
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded bg-[#6366F1]/20 border border-[#6366F1]/40 text-[#6366F1] flex items-center justify-center font-bold shadow-lg shadow-[#6366F1]/10">
-              <Database className="w-4 h-4" />
-            </div>
+            <Image
+              src="/logo.png"
+              alt="ContextCore Logo"
+              width={30}
+              height={30}
+              className="w-8 h-8 rounded-lg object-contain bg-surface border border-accent/40 shadow-sm"
+            />
             <div>
               <div className="flex items-center gap-2">
-                <span className="font-bold text-sm tracking-tight text-white font-sans">
+                <span className="font-bold text-sm tracking-tight text-foreground font-sans">
                   ContextCore Memory Graph
                 </span>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#3ECF8E]/10 border border-[#3ECF8E]/30 text-[#3ECF8E] font-semibold">
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-success/15 border border-success/30 text-success font-semibold">
                   LIVE VISUALIZER
                 </span>
               </div>
@@ -850,13 +871,13 @@ export default function MemoryGraphPage() {
         {/* Center / Right Controls */}
         <div className="flex items-center gap-3">
           {/* Repository Selector */}
-          <div className="flex items-center gap-2 bg-[#1A1A1E] px-3 py-1 rounded border border-[#26262B] text-xs font-mono">
-            <span className="text-[#9CA3AF] hidden sm:inline">REPO:</span>
+          <div className="flex items-center gap-2 bg-background px-3 py-1 rounded border border-border text-xs font-mono">
+            <span className="text-muted hidden sm:inline">REPO:</span>
             <input
               type="text"
               value={repoId}
               onChange={(e) => setRepoId(e.target.value)}
-              className="bg-transparent border-none text-[#6366F1] font-semibold focus:outline-none w-44"
+              className="bg-transparent border-none text-accent font-semibold focus:outline-none w-44"
               placeholder="repo_id..."
             />
           </div>
@@ -865,7 +886,7 @@ export default function MemoryGraphPage() {
             onClick={fetchGraphData}
             disabled={isLoading}
             title="Refresh Memory Graph"
-            className="bg-[#1A1A1E] hover:bg-[#26262B] p-2 rounded border border-[#26262B] text-[#9CA3AF] hover:text-[#6366F1] transition-colors"
+            className="bg-surface hover:bg-surface/80 p-2 rounded border border-border text-muted hover:text-accent transition-colors cursor-pointer"
           >
             <RotateCw className={`w-3.5 h-3.5 ${isLoading ? "animate-spin" : ""}`} />
           </button>
@@ -873,7 +894,7 @@ export default function MemoryGraphPage() {
           {/* Quick Teach Rule Button */}
           <button
             onClick={() => setShowTeachModal(true)}
-            className="flex items-center gap-1.5 bg-[#6366F1] hover:bg-[#818CF8] text-white text-xs font-semibold px-3 py-1.5 rounded transition-all shadow-md shadow-[#6366F1]/20 hover:shadow-[#6366F1]/30"
+            className="flex items-center gap-1.5 bg-accent hover:bg-accent-hover text-white text-xs font-semibold px-3 py-1.5 rounded transition-all shadow-md shadow-accent/20 cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>Teach Rule</span>
@@ -882,11 +903,13 @@ export default function MemoryGraphPage() {
           {/* Link to List Inspector */}
           <Link
             href="/memory"
-            className="hidden md:flex items-center gap-1.5 text-xs text-[#9CA3AF] hover:text-white bg-[#1A1A1E] hover:bg-[#26262B] px-3 py-1.5 rounded border border-[#26262B] transition-colors"
+            className="hidden md:flex items-center gap-1.5 text-xs text-muted hover:text-foreground bg-surface hover:bg-surface/80 px-3 py-1.5 rounded border border-border transition-colors"
           >
             <Layers className="w-3.5 h-3.5" />
             <span>Table View</span>
           </Link>
+
+          <AuthButton />
         </div>
       </header>
 
