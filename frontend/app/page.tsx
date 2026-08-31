@@ -1,838 +1,222 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import Link from "next/link";
 import {
   Terminal,
   Database,
-  Cpu,
   Zap,
-  Star,
-  Send,
-  RotateCw,
-  GitBranch,
-  Copy,
-  Check,
-  AlertCircle,
-  Code2,
+  GitCommit,
+  Settings,
+  RefreshCw,
   FolderGit2,
-  Brain,
-  ShieldCheck,
-  DollarSign,
-  Layers,
-  Sparkles,
-  ArrowRight,
+  Code2,
+  Play,
+  FileText
 } from "lucide-react";
 
-interface Message {
-  id: string;
-  sender: "user" | "assistant" | "system";
-  text: string;
-  type?: "answer" | "correction_ack" | "system";
-  model_used?: string;
-  topic?: string;
-  corrections_applied?: string[];
-  resumed_from_checkpoint?: boolean;
-  timestamp: string;
-}
-
-interface Correction {
-  id?: string;
-  correction_id?: string;
-  topic?: string;
-  text: string;
-  timestamp?: any;
-}
-
-interface CostSummary {
-  flash: { call_count: number; tokens_est: number; cost_est: number };
-  pro: { call_count: number; tokens_est: number; cost_est: number };
-  other?: { call_count: number; tokens_est: number; cost_est: number };
-  total_calls: number;
-  total_cost: number;
-}
-
-const PRO_KEYWORDS = [
-  "generate",
-  "refactor",
-  "architect",
-  "implement",
-  "build",
-  "design",
-  "create",
-];
-
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-const SESSION_ID = "demo-session-1";
-
-export default function ContextCorePage() {
-  // State: Onboarding
-  const [repoId, setRepoId] = useState("mario-world/contextcore");
-  const [githubUrl, setGithubUrl] = useState(
-    "https://github.com/mario-world/contextcore"
-  );
-  const [isOnboarding, setIsOnboarding] = useState(false);
-  const [onboardStatus, setOnboardStatus] = useState<{
-    type: "success" | "error" | "info" | null;
-    message: string;
-    files?: number;
-    chunks?: number;
-  }>({ type: null, message: "" });
-
-  // State: Chat
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: "init-1",
-      sender: "system",
-      text: `ContextCore initialized. Ready for repository exploration and memory-augmented coding. Session ID: ${SESSION_ID}`,
-      type: "system",
-      timestamp: new Date().toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-    },
-  ]);
-  const [inputMessage, setInputMessage] = useState("");
-  const [isSending, setIsSending] = useState(false);
-  const [copiedId, setCopiedId] = useState<string | null>(null);
-
-  // State: Memory & Costs
-  const [corrections, setCorrections] = useState<Correction[]>([]);
-  const [isLoadingMemory, setIsLoadingMemory] = useState(false);
-  const [costSummary, setCostSummary] = useState<CostSummary>({
-    flash: { call_count: 0, tokens_est: 0, cost_est: 0.0 },
-    pro: { call_count: 0, tokens_est: 0, cost_est: 0.0 },
-    total_calls: 0,
-    total_cost: 0.0,
-  });
-  const [isLoadingCosts, setIsLoadingCosts] = useState(false);
-
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  // Auto scroll chat
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isSending]);
-
-  // Initial fetch for Memory and Costs
-  useEffect(() => {
-    if (repoId) {
-      fetchMemory();
-    }
-    fetchCosts();
-  }, [repoId]);
-
-  // Real-time model prediction based on prompt keywords
-  const predictedModel = React.useMemo(() => {
-    const lower = inputMessage.toLowerCase();
-    const isPro = PRO_KEYWORDS.some((kw) => new RegExp(`\\b${kw}\\b`).test(lower));
-    return isPro ? "gemini-2.5-pro" : "gemini-2.0-flash";
-  }, [inputMessage]);
-
-  // API Call: Fetch Memory
-  const fetchMemory = async () => {
-    if (!repoId.trim()) return;
-    setIsLoadingMemory(true);
-    try {
-      const res = await fetch(`${API_BASE}/memory/${encodeURIComponent(repoId)}`);
-      if (res.ok) {
-        const data = await res.json();
-        setCorrections(data.corrections || []);
-      }
-    } catch (err) {
-      console.error("Failed to fetch memory:", err);
-    } finally {
-      setIsLoadingMemory(false);
-    }
-  };
-
-  // API Call: Fetch Costs
-  const fetchCosts = async () => {
-    setIsLoadingCosts(true);
-    try {
-      const res = await fetch(`${API_BASE}/costs`);
-      if (res.ok) {
-        const data = await res.json();
-        setCostSummary(data);
-      }
-    } catch (err) {
-      console.error("Failed to fetch costs:", err);
-    } finally {
-      setIsLoadingCosts(false);
-    }
-  };
-
-  // API Call: Onboard Repo (POST /ingest)
-  const handleOnboard = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!repoId.trim() || !githubUrl.trim()) return;
-
-    setIsOnboarding(true);
-    setOnboardStatus({
-      type: "info",
-      message: "Cloning repository, analyzing AST/regex chunks, and generating embeddings...",
-    });
-
-    try {
-      const res = await fetch(`${API_BASE}/ingest`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          github_url: githubUrl,
-          repo_id: repoId,
-        }),
-      });
-
-      const data = await res.json();
-      if (res.ok) {
-        setOnboardStatus({
-          type: "success",
-          message: `Onboarded ${repoId} successfully!`,
-          files: data.files_processed,
-          chunks: data.chunks_stored || data.chunks_indexed,
-        });
-
-        // Add system message in chat
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: String(Date.now()),
-            sender: "system",
-            text: `Repository ${repoId} indexed: ${data.files_processed || 0} files processed, ${
-              data.chunks_stored || data.chunks_indexed || 0
-            } code chunks embedded into Vector Search.`,
-            type: "system",
-            timestamp: new Date().toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-            }),
-          },
-        ]);
-
-        fetchMemory();
-        fetchCosts();
-      } else {
-        setOnboardStatus({
-          type: "error",
-          message: data.detail || "Failed to onboard repository.",
-        });
-      }
-    } catch (err: any) {
-      setOnboardStatus({
-        type: "error",
-        message: err.message || "Network error while connecting to backend.",
-      });
-    } finally {
-      setIsOnboarding(false);
-    }
-  };
-
-  // API Call: Send Chat Message (POST /chat)
-  const handleSendMessage = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (!inputMessage.trim() || isSending) return;
-
-    const userText = inputMessage.trim();
-    setInputMessage("");
-
-    // Add user message to UI immediately
-    const userMsgObj: Message = {
-      id: String(Date.now()),
-      sender: "user",
-      text: userText,
-      timestamp: new Date().toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-    };
-    setMessages((prev) => [...prev, userMsgObj]);
-    setIsSending(true);
-
-    try {
-      const res = await fetch(`${API_BASE}/chat`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          session_id: SESSION_ID,
-          repo_id: repoId,
-          message: userText,
-        }),
-      });
-
-      const data = await res.json();
-      if (res.ok) {
-        const assistantMsgObj: Message = {
-          id: String(Date.now() + 1),
-          sender: "assistant",
-          text: data.reply,
-          type: data.type,
-          model_used: data.model_used,
-          topic: data.topic,
-          corrections_applied: data.corrections_applied,
-          resumed_from_checkpoint: data.resumed_from_checkpoint,
-          timestamp: new Date().toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
-          }),
-        };
-        setMessages((prev) => [...prev, assistantMsgObj]);
-      } else {
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: String(Date.now() + 1),
-            sender: "assistant",
-            text: `Error from server: ${data.detail || "Unable to process message"}`,
-            type: "answer",
-            timestamp: new Date().toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-            }),
-          },
-        ]);
-      }
-    } catch (err: any) {
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: String(Date.now() + 1),
-          sender: "assistant",
-          text: `Network Error: ${err.message || "Failed to reach backend API"}`,
-          type: "answer",
-          timestamp: new Date().toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
-          }),
-        },
-      ]);
-    } finally {
-      setIsSending(false);
-      // Auto-refresh Memory panel and Cost Dashboard
-      fetchMemory();
-      fetchCosts();
-    }
-  };
-
-  const copyToClipboard = (text: string, id: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 2000);
-  };
-
-  // Helper for topic tag colors
-  const getTopicBadgeStyle = (topic: string = "general") => {
-    const t = topic.toLowerCase();
-    if (t === "auth")
-      return "border-[#4f6bff]/40 bg-[#4f6bff]/10 text-[#bac3ff]";
-    if (t === "naming" || t === "style")
-      return "border-[#3ecf8e]/40 bg-[#3ecf8e]/10 text-[#51df9c]";
-    if (t === "database" || t === "api")
-      return "border-[#e66f1e]/40 bg-[#e66f1e]/10 text-[#ffb68f]";
-    return "border-[#27272a] bg-[#1c1b1c] text-[#c5c5d8]";
-  };
-
+export default function LandingPage() {
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-[#0a0a0b] text-[#e5e2e3]">
-      {/* Top Header */}
-      <header className="h-14 border-b border-[#27272a] bg-[#131314]/90 backdrop-blur px-6 flex items-center justify-between shrink-0 z-20">
+    <div className="min-h-screen flex flex-col bg-background text-foreground font-sans selection:bg-accent/30 selection:text-white">
+      {/* Top Header / Nav */}
+      <header className="h-14 border-b border-border bg-surface/90 backdrop-blur px-6 flex items-center justify-between shrink-0 z-20 sticky top-0">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded bg-[#4f6bff]/20 border border-[#4f6bff]/40 text-[#4f6bff] flex items-center justify-center font-bold">
-            <Terminal className="w-4 h-4" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="font-semibold text-sm tracking-tight text-white">
-                ContextCore
-              </span>
-              <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-[#27272a] text-[#8e8fa1] border border-[#3a393a]">
-                Agent ADK 2.0
-              </span>
+          {/* Logo & Wordmark */}
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded bg-accent/20 border border-accent/40 text-accent flex items-center justify-center font-bold">
+              <Terminal className="w-4 h-4" />
             </div>
-            <span className="text-[11px] text-[#8e8fa1] font-mono leading-none block">
-              Persistent Codebase & Convention Memory
+            <span className="font-bold text-sm tracking-tight text-white font-sans">
+              ContextCore
+            </span>
+          </div>
+
+          {/* Center-Left Tab Links (Visual Only) */}
+          <div className="hidden lg:flex items-center ml-8 border-l border-border pl-6 h-8 space-x-1">
+            <span className="px-3 py-1 text-xs font-semibold text-white bg-background border border-border rounded flex items-center gap-1.5 cursor-default select-none">
+              <FolderGit2 className="w-3.5 h-3.5 text-accent" />
+              Explorer
+            </span>
+            <span className="px-3 py-1 text-xs font-medium text-muted hover:text-white rounded flex items-center gap-1.5 transition-colors cursor-default select-none">
+              <Terminal className="w-3.5 h-3.5 text-muted/60" />
+              Terminal
+            </span>
+            <span className="px-3 py-1 text-xs font-medium text-muted hover:text-white rounded flex items-center gap-1.5 transition-colors cursor-default select-none">
+              <Code2 className="w-3.5 h-3.5 text-muted/60" />
+              Debug
             </span>
           </div>
         </div>
 
-        {/* Status Indicators */}
-        <div className="flex items-center gap-4 text-xs font-mono">
-          <div className="hidden sm:flex items-center gap-2 bg-[#1c1b1c] px-3 py-1 rounded border border-[#27272a]">
-            <span className="w-2 h-2 rounded-full bg-[#3ecf8e] animate-pulse"></span>
-            <span className="text-[#8e8fa1]">SESSION:</span>
-            <span className="text-[#e5e2e3] font-semibold">{SESSION_ID}</span>
+        {/* Right Side Info & Text Links */}
+        <div className="flex items-center gap-5 text-xs">
+          {/* Session Breadcrumb Placeholder */}
+          <div className="hidden sm:flex items-center gap-1.5 bg-surface/50 border border-border/80 px-2.5 py-1 rounded font-mono text-muted text-[11px]">
+            <span className="text-[10px] font-bold text-accent/80 tracking-wider">SESSION:</span>
+            <span className="text-white font-medium">workspace / demo-session-1</span>
           </div>
-          <div className="flex items-center gap-2 bg-[#1c1b1c] px-3 py-1 rounded border border-[#27272a]">
-            <span className="text-[#8e8fa1]">ACTIVE REPO:</span>
-            <span className="text-[#4f6bff] font-semibold truncate max-w-[140px]">
-              {repoId}
-            </span>
+
+          {/* Sync Link */}
+          <button className="flex items-center gap-1 text-muted hover:text-accent font-medium transition-colors cursor-pointer select-none">
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>sync</span>
+          </button>
+
+          {/* Settings Link */}
+          <button className="flex items-center gap-1 text-muted hover:text-accent font-medium transition-colors cursor-pointer select-none">
+            <Settings className="w-3.5 h-3.5" />
+            <span>settings</span>
+          </button>
+
+          {/* Circular Avatar Placeholder */}
+          <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-accent to-success border border-border/80 flex items-center justify-center text-[10px] font-bold text-white shadow-md select-none font-mono">
+            CC
           </div>
         </div>
       </header>
 
-      {/* Main Two-Column Layout */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* ================= LEFT COLUMN: ONBOARDING & CHAT ================= */}
-        <div className="flex-1 flex flex-col border-r border-[#27272a] bg-[#0a0a0b] overflow-hidden">
-          {/* Repo Onboarding Section */}
-          <div className="p-4 border-b border-[#27272a] bg-[#131314]/50">
-            <div className="max-w-4xl mx-auto">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2 text-xs font-mono uppercase text-[#8e8fa1]">
-                  <FolderGit2 className="w-3.5 h-3.5 text-[#4f6bff]" />
-                  <span>Repository Onboarding (Vector & Graph Memory)</span>
-                </div>
-                {onboardStatus.type && (
-                  <div
-                    className={`text-xs px-2 py-0.5 rounded flex items-center gap-1.5 ${
-                      onboardStatus.type === "success"
-                        ? "bg-[#3ecf8e]/10 text-[#3ecf8e] border border-[#3ecf8e]/30"
-                        : onboardStatus.type === "error"
-                        ? "bg-red-500/10 text-red-400 border border-red-500/30"
-                        : "bg-[#4f6bff]/10 text-[#4f6bff] border border-[#4f6bff]/30"
-                    }`}
-                  >
-                    {onboardStatus.type === "success" ? (
-                      <Check className="w-3 h-3" />
-                    ) : onboardStatus.type === "error" ? (
-                      <AlertCircle className="w-3 h-3" />
-                    ) : (
-                      <RotateCw className="w-3 h-3 animate-spin" />
-                    )}
-                    <span className="truncate max-w-[320px]">
-                      {onboardStatus.message}
-                    </span>
-                    {onboardStatus.chunks !== undefined && (
-                      <span className="font-mono font-semibold ml-1">
-                        ({onboardStatus.chunks} chunks)
-                      </span>
-                    )}
-                  </div>
-                )}
-              </div>
+      {/* Main Hero Container */}
+      <main className="flex-1 flex flex-col justify-center items-center px-6 py-20 relative overflow-hidden">
+        {/* Glow Effects */}
+        <div className="absolute top-[-20%] left-[50%] translate-x-[-50%] w-[80%] h-[60%] bg-gradient-to-b from-accent/15 to-transparent rounded-full blur-[120px] pointer-events-none -z-10" />
+        <div className="absolute bottom-[-10%] right-[10%] w-[300px] h-[300px] bg-success/5 rounded-full blur-[100px] pointer-events-none -z-10" />
 
-              <form
-                onSubmit={handleOnboard}
-                className="grid grid-cols-1 md:grid-cols-12 gap-2"
-              >
-                <div className="md:col-span-4 relative">
-                  <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-[#8e8fa1]">
-                    <GitBranch className="w-3.5 h-3.5" />
-                  </div>
-                  <input
-                    type="text"
-                    value={repoId}
-                    onChange={(e) => setRepoId(e.target.value)}
-                    placeholder="repo_id (e.g. owner/repo)"
-                    className="w-full bg-[#1c1b1c] border border-[#27272a] rounded px-3 py-1.5 pl-8 text-xs font-mono text-[#e5e2e3] placeholder-[#8e8fa1]/50 focus:border-[#4f6bff] focus:outline-none transition-colors"
-                  />
-                </div>
+        {/* Background Grid Accent */}
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff03_1px,transparent_1px),linear-gradient(to_bottom,#ffffff03_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_40%,#000_70%,transparent_100%)] -z-20 opacity-40 pointer-events-none" />
 
-                <div className="md:col-span-6 relative">
-                  <input
-                    type="text"
-                    value={githubUrl}
-                    onChange={(e) => setGithubUrl(e.target.value)}
-                    placeholder="GitHub Repo URL (e.g. https://github.com/org/repo)"
-                    className="w-full bg-[#1c1b1c] border border-[#27272a] rounded px-3 py-1.5 text-xs font-mono text-[#e5e2e3] placeholder-[#8e8fa1]/50 focus:border-[#4f6bff] focus:outline-none transition-colors"
-                  />
-                </div>
-
-                <div className="md:col-span-2">
-                  <button
-                    type="submit"
-                    disabled={isOnboarding}
-                    className="w-full bg-[#4f6bff] hover:bg-[#3b54d6] disabled:opacity-50 text-white font-medium py-1.5 px-3 rounded text-xs transition-colors flex items-center justify-center gap-1.5 shadow-sm"
-                  >
-                    {isOnboarding ? (
-                      <>
-                        <RotateCw className="w-3.5 h-3.5 animate-spin" />
-                        <span>Indexing...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles className="w-3.5 h-3.5" />
-                        <span>Onboard</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-
-          {/* Chat Messages List */}
-          <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4">
-            <div className="max-w-4xl mx-auto space-y-4">
-              {messages.map((msg) => (
-                <div
-                  key={msg.id}
-                  className={`flex gap-3 text-sm ${
-                    msg.sender === "user" ? "justify-end" : "justify-start"
-                  }`}
-                >
-                  {msg.sender !== "user" && (
-                    <div className="w-7 h-7 rounded bg-[#1c1b1c] border border-[#27272a] text-[#4f6bff] flex items-center justify-center shrink-0 mt-0.5">
-                      {msg.sender === "system" ? (
-                        <Terminal className="w-3.5 h-3.5 text-[#8e8fa1]" />
-                      ) : msg.type === "correction_ack" ? (
-                        <ShieldCheck className="w-3.5 h-3.5 text-[#3ecf8e]" />
-                      ) : (
-                        <Cpu className="w-3.5 h-3.5 text-[#4f6bff]" />
-                      )}
-                    </div>
-                  )}
-
-                  <div
-                    className={`max-w-[85%] rounded-md p-3 space-y-2 ${
-                      msg.sender === "user"
-                        ? "bg-[#1c1b1c] border border-[#27272a] text-white"
-                        : msg.sender === "system"
-                        ? "bg-[#131314]/80 border border-[#27272a] text-[#8e8fa1] text-xs font-mono"
-                        : "bg-[#131314] border border-[#27272a] text-[#e5e2e3]"
-                    }`}
-                  >
-                    {/* Header info */}
-                    <div className="flex items-center justify-between gap-3 text-[11px] font-mono text-[#8e8fa1] border-b border-[#27272a]/50 pb-1 mb-1.5">
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-semibold text-[#c5c5d8]">
-                          {msg.sender === "user"
-                            ? "You"
-                            : msg.sender === "system"
-                            ? "System"
-                            : "ContextCore"}
-                        </span>
-
-                        {msg.model_used && (
-                          <span
-                            className={`px-1.5 py-0.2 rounded text-[10px] flex items-center gap-1 border ${
-                              msg.model_used.includes("pro")
-                                ? "bg-[#4f6bff]/10 border-[#4f6bff]/30 text-[#bac3ff]"
-                                : "bg-[#3ecf8e]/10 border-[#3ecf8e]/30 text-[#51df9c]"
-                            }`}
-                          >
-                            {msg.model_used.includes("pro") ? (
-                              <Star className="w-2.5 h-2.5 fill-[#bac3ff]" />
-                            ) : (
-                              <Zap className="w-2.5 h-2.5" />
-                            )}
-                            {msg.model_used}
-                          </span>
-                        )}
-
-                        {msg.type === "correction_ack" && (
-                          <span className="px-1.5 py-0.2 rounded text-[10px] bg-[#3ecf8e]/10 border border-[#3ecf8e]/30 text-[#3ecf8e] font-semibold">
-                            Convention Saved [{msg.topic?.toUpperCase() || "RULE"}]
-                          </span>
-                        )}
-
-                        {msg.resumed_from_checkpoint && (
-                          <span className="px-1.5 py-0.2 rounded text-[10px] bg-amber-500/10 border border-amber-500/30 text-amber-300">
-                            Resumed Checkpoint
-                          </span>
-                        )}
-                      </div>
-
-                      <span className="text-[10px] opacity-60">
-                        {msg.timestamp}
-                      </span>
-                    </div>
-
-                    {/* Applied Corrections Thought Bubble */}
-                    {msg.corrections_applied &&
-                      msg.corrections_applied.length > 0 && (
-                        <div className="border-l-2 border-[#4f6bff] bg-[#1c1b1c]/50 pl-3 py-1.5 my-1.5 text-xs font-mono text-[#bac3ff] space-y-1">
-                          <div className="flex items-center gap-1.5 text-[#4f6bff] font-semibold text-[11px]">
-                            <Brain className="w-3 h-3" />
-                            <span>
-                              Applied Learned Conventions ({msg.corrections_applied.length}):
-                            </span>
-                          </div>
-                          {msg.corrections_applied.map((cText, idx) => (
-                            <div key={idx} className="text-[#8e8fa1] pl-2">
-                              • {cText}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                    {/* Message Body */}
-                    <div className="text-xs md:text-sm leading-relaxed whitespace-pre-wrap font-sans">
-                      {msg.text}
-                    </div>
-
-                    {/* Quick action bar */}
-                    {msg.sender === "assistant" && (
-                      <div className="flex justify-end pt-1">
-                        <button
-                          onClick={() => copyToClipboard(msg.text, msg.id)}
-                          className="text-[10px] font-mono text-[#8e8fa1] hover:text-[#4f6bff] flex items-center gap-1 transition-colors"
-                        >
-                          {copiedId === msg.id ? (
-                            <>
-                              <Check className="w-3 h-3 text-[#3ecf8e]" />
-                              <span className="text-[#3ecf8e]">Copied</span>
-                            </>
-                          ) : (
-                            <>
-                              <Copy className="w-3 h-3" />
-                              <span>Copy</span>
-                            </>
-                          )}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-
-              {isSending && (
-                <div className="flex gap-3 text-sm">
-                  <div className="w-7 h-7 rounded bg-[#1c1b1c] border border-[#27272a] text-[#4f6bff] flex items-center justify-center shrink-0">
-                    <RotateCw className="w-3.5 h-3.5 animate-spin" />
-                  </div>
-                  <div className="bg-[#131314] border border-[#27272a] rounded-md p-3 text-xs font-mono text-[#8e8fa1] flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-[#4f6bff] animate-ping" />
-                    <span>
-                      Retrieving memory chunks & invoking {predictedModel}...
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              <div ref={messagesEndRef} />
-            </div>
-          </div>
-
-          {/* Chat Input Area */}
-          <div className="p-4 border-t border-[#27272a] bg-[#131314]/80">
-            <div className="max-w-4xl mx-auto space-y-2">
-              <form onSubmit={handleSendMessage} className="relative">
-                <textarea
-                  value={inputMessage}
-                  onChange={(e) => setInputMessage(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSendMessage();
-                    }
-                  }}
-                  rows={2}
-                  placeholder="Ask about the codebase, or teach a convention (e.g. 'Actually we use CamelCase instead of snake_case')..."
-                  className="w-full bg-[#050505] border border-[#27272a] rounded-md p-3 pr-24 text-xs md:text-sm text-[#e5e2e3] placeholder-[#8e8fa1]/50 focus:border-[#4f6bff] focus:outline-none resize-none transition-colors"
-                />
-
-                <div className="absolute right-2.5 bottom-3 flex items-center gap-2">
-                  <button
-                    type="submit"
-                    disabled={!inputMessage.trim() || isSending}
-                    className="h-8 px-3 rounded bg-[#4f6bff] hover:bg-[#3b54d6] disabled:opacity-40 text-white text-xs font-medium flex items-center gap-1.5 transition-colors shadow-sm"
-                  >
-                    <span>Send</span>
-                    <Send className="w-3 h-3" />
-                  </button>
-                </div>
-              </form>
-
-              {/* Input Meta Footer */}
-              <div className="flex justify-between items-center text-[11px] font-mono text-[#8e8fa1] px-1">
-                <div className="flex items-center gap-2">
-                  <span>Routing:</span>
-                  <span
-                    className={`font-semibold flex items-center gap-1 ${
-                      predictedModel.includes("pro")
-                        ? "text-[#bac3ff]"
-                        : "text-[#51df9c]"
-                    }`}
-                  >
-                    {predictedModel.includes("pro") ? (
-                      <Star className="w-3 h-3 fill-current" />
-                    ) : (
-                      <Zap className="w-3 h-3" />
-                    )}
-                    {predictedModel}
-                  </span>
-                  <span className="text-[#8e8fa1]/40">|</span>
-                  <span className="text-[#8e8fa1]/60">Press Enter to send</span>
-                </div>
-
-                <div className="hidden sm:block text-[#8e8fa1]/60">
-                  Memory checks: ON
-                </div>
-              </div>
-            </div>
-          </div>
+        {/* 1. Centered Pill Badge */}
+        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-border bg-surface/80 backdrop-blur-md mb-8 shadow-lg shadow-black/40">
+          <span className="relative flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-accent animate-pulse"></span>
+          </span>
+          <span className="text-[11px] font-bold tracking-wider text-white font-mono">
+            SYSTEM.READY
+          </span>
+          <span className="w-1.5 h-1.5 rounded-full bg-border" />
+          <span className="text-[11px] text-muted font-mono">
+            v1.0.4-stable
+          </span>
         </div>
 
-        {/* ================= RIGHT COLUMN: MEMORY & COST DASHBOARD ================= */}
-        <aside className="w-80 md:w-96 bg-[#131314] flex flex-col overflow-y-auto shrink-0 border-l border-[#27272a]">
-          {/* Header */}
-          <div className="p-3.5 border-b border-[#27272a] bg-[#1c1b1c] flex items-center justify-between sticky top-0 z-10">
-            <div className="flex items-center gap-2 font-mono text-xs text-white font-semibold uppercase tracking-wider">
-              <Layers className="w-3.5 h-3.5 text-[#4f6bff]" />
-              <span>Inspector & Memory</span>
-            </div>
-            <button
-              onClick={() => {
-                fetchMemory();
-                fetchCosts();
-              }}
-              title="Refresh panels"
-              className="text-[#8e8fa1] hover:text-[#4f6bff] transition-colors p-1 rounded hover:bg-[#27272a]"
-            >
-              <RotateCw
-                className={`w-3.5 h-3.5 ${
-                  isLoadingMemory || isLoadingCosts ? "animate-spin" : ""
-                }`}
-              />
-            </button>
-          </div>
+        {/* 2. Large Centered Heading */}
+        <h1 className="text-center font-extrabold text-5xl md:text-7xl lg:text-8xl tracking-tight leading-[1.05] mb-6 max-w-5xl">
+          <span className="text-white block">
+            The AI Partner That
+          </span>
+          <span className="text-accent block mt-1 bg-clip-text text-transparent bg-gradient-to-r from-accent to-accent-hover">
+            Remembers Your Code.
+          </span>
+        </h1>
 
-          <div className="p-4 space-y-6">
-            {/* Panel 1: Learned Memory Panel */}
-            <div className="bg-[#1c1b1c] border border-[#27272a] rounded-md overflow-hidden flex flex-col">
-              <div className="p-3 border-b border-[#27272a] flex items-center justify-between">
-                <div className="flex items-center gap-2 text-xs font-semibold text-white">
-                  <Database className="w-4 h-4 text-[#4f6bff]" />
-                  <span>Team Conventions ({corrections.length})</span>
-                </div>
-                <span className="text-[10px] font-mono uppercase bg-[#4f6bff]/10 text-[#4f6bff] border border-[#4f6bff]/30 px-1.5 py-0.5 rounded">
-                  MUST Follow
+        {/* 3. Subheading */}
+        <p className="text-center text-muted text-base md:text-lg lg:text-xl max-w-2xl mb-10 leading-relaxed font-normal">
+          A technical coding agent with long-term repository memory. Built for precision, not play.
+        </p>
+
+        {/* 4. Action Buttons */}
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-24 w-full max-w-md">
+          {/* Start a New Session Button */}
+          <Link
+            href="/workspace"
+            className="w-full sm:w-auto px-8 py-3.5 bg-accent hover:bg-accent-hover text-white font-semibold rounded text-sm transition-all duration-200 flex items-center justify-center gap-2 shadow-lg shadow-accent/20 hover:shadow-accent/30 hover:-translate-y-0.5 active:translate-y-0"
+          >
+            <Play className="w-4 h-4 fill-current text-white" />
+            <span>Start a New Session</span>
+          </Link>
+
+          {/* Docs Button */}
+          <a
+            href="https://github.com/mario-world/contextcore"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-full sm:w-auto px-8 py-3.5 border border-border hover:border-accent/40 bg-surface/50 hover:bg-surface text-white font-semibold rounded text-sm transition-all duration-200 flex items-center justify-center gap-2 hover:-translate-y-0.5 active:translate-y-0"
+          >
+            <FileText className="w-4 h-4 text-muted" />
+            <span>Docs</span>
+          </a>
+        </div>
+
+        {/* 5. Stat Cards Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-5xl">
+          {/* Card 1: Memory */}
+          <div className="bg-surface border border-border rounded p-6 relative overflow-hidden group hover:border-accent/30 transition-all duration-300 hover:shadow-xl hover:shadow-accent/5">
+            <div className="absolute inset-0 bg-gradient-to-tr from-accent/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+            
+            <div className="flex items-center justify-between mb-8 relative z-10">
+              <span className="font-mono text-xs text-muted/70 lowercase select-none">
+                database
+              </span>
+              <div className="flex items-center gap-1.5 text-muted/60 group-hover:text-accent transition-colors select-none">
+                <Database className="w-3.5 h-3.5" />
+                <span className="font-sans font-bold text-[10px] tracking-wider uppercase">
+                  MEMORY
                 </span>
               </div>
-
-              <div className="p-3 space-y-2.5">
-                <p className="text-[11px] text-[#8e8fa1] leading-tight">
-                  Persistent team rules learned from chat corrections and strictly enforced over generic standards.
-                </p>
-
-                {corrections.length === 0 ? (
-                  <div className="border border-dashed border-[#27272a] rounded p-4 text-center text-xs text-[#8e8fa1] space-y-1">
-                    <p className="font-mono text-[11px]">No conventions saved yet.</p>
-                    <p className="text-[10px] text-[#8e8fa1]/60">
-                      Try: &quot;Actually, we use JWT tokens with Bearer auth.&quot;
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                    {corrections.map((c, idx) => (
-                      <div
-                        key={c.id || c.correction_id || idx}
-                        className="bg-[#131314] border border-[#27272a] rounded p-2.5 text-xs space-y-1.5 hover:border-[#4f6bff]/50 transition-colors"
-                      >
-                        <div className="flex items-center justify-between">
-                          <span
-                            className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold uppercase border ${getTopicBadgeStyle(
-                              c.topic
-                            )}`}
-                          >
-                            {c.topic || "General"}
-                          </span>
-                          <span className="text-[10px] font-mono text-[#8e8fa1]">
-                            #{idx + 1}
-                          </span>
-                        </div>
-                        <p className="text-xs text-[#e5e2e3] font-sans leading-relaxed">
-                          {c.text}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
             </div>
-
-            {/* Panel 2: Cost Dashboard Panel */}
-            <div className="bg-[#1c1b1c] border border-[#27272a] rounded-md overflow-hidden flex flex-col">
-              <div className="p-3 border-b border-[#27272a] flex items-center justify-between">
-                <div className="flex items-center gap-2 text-xs font-semibold text-white">
-                  <DollarSign className="w-4 h-4 text-[#3ecf8e]" />
-                  <span>Cost Dashboard</span>
-                </div>
-                <span className="text-[10px] font-mono text-[#3ecf8e] font-semibold">
-                  ${costSummary.total_cost.toFixed(5)}
-                </span>
+            
+            <div className="relative z-10">
+              <div className="text-4xl font-extrabold text-white tracking-tight mb-2 font-mono">
+                2.4 TB
               </div>
-
-              <div className="p-3.5 space-y-4">
-                {/* Total Stats Summary Cards */}
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="bg-[#131314] border border-[#27272a] rounded p-2.5">
-                    <div className="text-[10px] font-mono text-[#8e8fa1] uppercase">
-                      Total Calls
-                    </div>
-                    <div className="text-lg font-bold font-mono text-white mt-0.5">
-                      {costSummary.total_calls}
-                    </div>
-                  </div>
-                  <div className="bg-[#131314] border border-[#27272a] rounded p-2.5">
-                    <div className="text-[10px] font-mono text-[#8e8fa1] uppercase">
-                      Total Spend
-                    </div>
-                    <div className="text-lg font-bold font-mono text-[#3ecf8e] mt-0.5">
-                      ${costSummary.total_cost.toFixed(4)}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Model Usage Breakdown */}
-                <div className="space-y-2">
-                  <div className="text-[11px] font-mono text-[#8e8fa1] uppercase">
-                    Model Breakdown
-                  </div>
-
-                  {/* Flash Model Card */}
-                  <div className="bg-[#131314] border border-[#27272a] rounded p-2.5 space-y-1.5">
-                    <div className="flex justify-between items-center text-xs font-mono">
-                      <span className="text-[#51df9c] font-semibold flex items-center gap-1">
-                        <Zap className="w-3 h-3" /> Flash (2.0)
-                      </span>
-                      <span className="text-white font-semibold">
-                        {costSummary.flash.call_count} calls
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-[11px] font-mono text-[#8e8fa1]">
-                      <span>~{costSummary.flash.tokens_est} tokens</span>
-                      <span className="text-[#51df9c]">
-                        ${costSummary.flash.cost_est.toFixed(5)}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Pro Model Card */}
-                  <div className="bg-[#131314] border border-[#27272a] rounded p-2.5 space-y-1.5">
-                    <div className="flex justify-between items-center text-xs font-mono">
-                      <span className="text-[#bac3ff] font-semibold flex items-center gap-1">
-                        <Star className="w-3 h-3 fill-current" /> Pro (2.5)
-                      </span>
-                      <span className="text-white font-semibold">
-                        {costSummary.pro.call_count} calls
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-[11px] font-mono text-[#8e8fa1]">
-                      <span>~{costSummary.pro.tokens_est} tokens</span>
-                      <span className="text-[#bac3ff]">
-                        ${costSummary.pro.cost_est.toFixed(5)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Panel 3: Quick Tip Card */}
-            <div className="bg-[#131314] border border-[#27272a] rounded-md p-3 text-xs space-y-1.5">
-              <div className="flex items-center gap-1.5 text-[#4f6bff] font-semibold font-mono text-[11px]">
-                <Code2 className="w-3.5 h-3.5" />
-                <span>ContextCore Memory Syntax</span>
-              </div>
-              <p className="text-[#8e8fa1] text-[11px] leading-relaxed">
-                Use keywords like <code className="text-[#e5e2e3]">actually</code>, <code className="text-[#e5e2e3]">we use</code>, or <code className="text-[#e5e2e3]">instead</code> in your chat message to permanently train ContextCore on a new architectural pattern.
+              <p className="text-sm text-muted font-sans font-medium">
+                Indexed Context
               </p>
             </div>
           </div>
-        </aside>
-      </div>
+
+          {/* Card 2: Latency */}
+          <div className="bg-surface border border-border rounded p-6 relative overflow-hidden group hover:border-accent/30 transition-all duration-300 hover:shadow-xl hover:shadow-accent/5">
+            <div className="absolute inset-0 bg-gradient-to-tr from-accent/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+            
+            <div className="flex items-center justify-between mb-8 relative z-10">
+              <span className="font-mono text-xs text-muted/70 lowercase select-none">
+                bolt
+              </span>
+              <div className="flex items-center gap-1.5 text-muted/60 group-hover:text-success transition-colors select-none">
+                <Zap className="w-3.5 h-3.5" />
+                <span className="font-sans font-bold text-[10px] tracking-wider uppercase">
+                  LATENCY
+                </span>
+              </div>
+            </div>
+            
+            <div className="relative z-10">
+              <div className="text-4xl font-extrabold text-white tracking-tight mb-2 font-mono">
+                12ms
+              </div>
+              <p className="text-sm text-muted font-sans font-medium">
+                Retrieval Time
+              </p>
+            </div>
+          </div>
+
+          {/* Card 3: Accuracy */}
+          <div className="bg-surface border border-border rounded p-6 relative overflow-hidden group hover:border-accent/30 transition-all duration-300 hover:shadow-xl hover:shadow-accent/5">
+            <div className="absolute inset-0 bg-gradient-to-tr from-accent/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+            
+            <div className="flex items-center justify-between mb-8 relative z-10">
+              <span className="font-mono text-xs text-muted/70 lowercase select-none">
+                commit
+              </span>
+              <div className="flex items-center gap-1.5 text-muted/60 group-hover:text-success transition-colors select-none">
+                <GitCommit className="w-3.5 h-3.5" />
+                <span className="font-sans font-bold text-[10px] tracking-wider uppercase">
+                  ACCURACY
+                </span>
+              </div>
+            </div>
+            
+            <div className="relative z-10">
+              <div className="text-4xl font-extrabold text-white tracking-tight mb-2 font-mono">
+                99.9%
+              </div>
+              <p className="text-sm text-muted font-sans font-medium">
+                Syntax Precision
+              </p>
+            </div>
+          </div>
+        </div>
+      </main>
     </div>
   );
 }

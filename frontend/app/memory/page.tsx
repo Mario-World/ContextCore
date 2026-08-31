@@ -97,7 +97,7 @@ export default function MemoryDashboardPage() {
       <header className="h-14 border-b border-[#27272a] bg-[#131314]/90 backdrop-blur px-6 flex items-center justify-between shrink-0 z-20">
         <div className="flex items-center gap-4">
           <Link
-            href="/"
+            href="/workspace"
             className="flex items-center gap-1.5 text-xs font-mono text-[#8e8fa1] hover:text-white transition-colors bg-[#1c1b1c] px-2.5 py-1 rounded border border-[#27272a]"
           >
             <ArrowLeft className="w-3.5 h-3.5" />

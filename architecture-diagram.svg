@@ -1,0 +1,104 @@
+<svg viewBox="0 0 1400 1000" xmlns="http://www.w3.org/2000/svg" font-family="'JetBrains Mono', 'Courier New', monospace">
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#818CF8"/>
+    </marker>
+  </defs>
+
+  <rect width="1400" height="1000" fill="#0A0A0B"/>
+
+  <!-- Title -->
+  <text x="700" y="50" text-anchor="middle" fill="#FFFFFF" font-size="28" font-weight="bold">ContextCore — Architecture</text>
+  <text x="700" y="78" text-anchor="middle" fill="#9CA3AF" font-size="14">Self-healing, cost-aware, memory-persistent coding agent on Google Cloud</text>
+
+  <!-- User -->
+  <rect x="620" y="110" width="160" height="50" rx="8" fill="#121214" stroke="#26262B" stroke-width="1.5"/>
+  <text x="700" y="140" text-anchor="middle" fill="#E5E7EB" font-size="14">Developer (User)</text>
+  <line x1="700" y1="160" x2="700" y2="195" stroke="#818CF8" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- Frontend -->
+  <rect x="450" y="200" width="500" height="90" rx="10" fill="#121214" stroke="#6366F1" stroke-width="2"/>
+  <text x="700" y="228" text-anchor="middle" fill="#818CF8" font-size="15" font-weight="bold">Next.js 14 Frontend — Cloud Run (scales to zero)</text>
+  <text x="700" y="250" text-anchor="middle" fill="#9CA3AF" font-size="12">Landing · Workspace (Chat / Memory Inspector / Cost Dashboard)</text>
+  <text x="700" y="270" text-anchor="middle" fill="#6B7280" font-size="11">Tailwind · shadcn/ui · recharts</text>
+  <line x1="700" y1="290" x2="700" y2="330" stroke="#818CF8" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="720" y="315" fill="#6B7280" font-size="11">REST / HTTPS</text>
+
+  <!-- Backend container -->
+  <rect x="280" y="335" width="840" height="330" rx="10" fill="#121214" stroke="#26262B" stroke-width="1.5"/>
+  <text x="700" y="362" text-anchor="middle" fill="#E5E7EB" font-size="15" font-weight="bold">FastAPI Backend — Cloud Run</text>
+
+  <!-- Coordinator box -->
+  <rect x="320" y="380" width="760" height="140" rx="8" fill="#0D0D10" stroke="#6366F1" stroke-width="1.5" stroke-dasharray="4,3"/>
+  <text x="700" y="402" text-anchor="middle" fill="#818CF8" font-size="13" font-weight="bold">Coordinator (checkpointed step-by-step, Google ADK 2.0)</text>
+
+  <rect x="345" y="418" width="210" height="80" rx="6" fill="#121214" stroke="#26262B"/>
+  <text x="450" y="440" text-anchor="middle" fill="#E5E7EB" font-size="12" font-weight="bold">1. Detect correction?</text>
+  <text x="450" y="460" text-anchor="middle" fill="#9CA3AF" font-size="10">Yes → store as</text>
+  <text x="450" y="474" text-anchor="middle" fill="#9CA3AF" font-size="10">permanent memory</text>
+  <text x="450" y="490" text-anchor="middle" fill="#3ECF8E" font-size="10">✓ short-circuit ack</text>
+
+  <rect x="575" y="418" width="200" height="80" rx="6" fill="#121214" stroke="#26262B"/>
+  <text x="675" y="440" text-anchor="middle" fill="#E5E7EB" font-size="12" font-weight="bold">2. Retrieve memory</text>
+  <text x="675" y="460" text-anchor="middle" fill="#9CA3AF" font-size="10">corrections always</text>
+  <text x="675" y="474" text-anchor="middle" fill="#9CA3AF" font-size="10">boosted above raw</text>
+  <text x="675" y="488" text-anchor="middle" fill="#9CA3AF" font-size="10">similarity rank</text>
+
+  <rect x="795" y="418" width="140" height="80" rx="6" fill="#121214" stroke="#26262B"/>
+  <text x="865" y="440" text-anchor="middle" fill="#E5E7EB" font-size="12" font-weight="bold">3. Route</text>
+  <text x="865" y="460" text-anchor="middle" fill="#A78BFA" font-size="10">★ Pro: generate/</text>
+  <text x="865" y="474" text-anchor="middle" fill="#A78BFA" font-size="10">refactor/build</text>
+  <text x="865" y="488" text-anchor="middle" fill="#3ECF8E" font-size="10">⚡ Flash: else</text>
+
+  <line x1="555" y1="458" x2="575" y2="458" stroke="#4B5563" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="775" y1="458" x2="795" y2="458" stroke="#4B5563" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <text x="700" y="512" text-anchor="middle" fill="#6B7280" font-size="10">4. Generate response → 5. Log cost → checkpoint written to Firestore after every step</text>
+
+  <!-- Tools row -->
+  <rect x="320" y="535" width="230" height="60" rx="6" fill="#0D0D10" stroke="#26262B"/>
+  <text x="435" y="558" text-anchor="middle" fill="#E5E7EB" font-size="11" font-weight="bold">GitHub Tool</text>
+  <text x="435" y="576" text-anchor="middle" fill="#6B7280" font-size="10">clone (fine-grained PAT,</text>
+  <text x="435" y="588" text-anchor="middle" fill="#6B7280" font-size="10">read-only) · list files</text>
+
+  <rect x="570" y="535" width="230" height="60" rx="6" fill="#0D0D10" stroke="#26262B"/>
+  <text x="685" y="558" text-anchor="middle" fill="#E5E7EB" font-size="11" font-weight="bold">Code Parser Tool</text>
+  <text x="685" y="576" text-anchor="middle" fill="#6B7280" font-size="10">function/class boundary</text>
+  <text x="685" y="588" text-anchor="middle" fill="#6B7280" font-size="10">chunking</text>
+
+  <rect x="820" y="535" width="230" height="60" rx="6" fill="#0D0D10" stroke="#26262B"/>
+  <text x="935" y="558" text-anchor="middle" fill="#E5E7EB" font-size="11" font-weight="bold">Embedding Service</text>
+  <text x="935" y="576" text-anchor="middle" fill="#6B7280" font-size="10">Gemini text-embedding-004</text>
+  <text x="935" y="588" text-anchor="middle" fill="#6B7280" font-size="10">(768-dim)</text>
+
+  <text x="700" y="618" text-anchor="middle" fill="#6B7280" font-size="10">Auth: Application Default Credentials (gcloud) — no service-account key files</text>
+
+  <!-- Arrows down to data layer -->
+  <line x1="500" y1="665" x2="500" y2="710" stroke="#818CF8" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="900" y1="665" x2="900" y2="710" stroke="#818CF8" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- Firestore -->
+  <rect x="300" y="715" width="400" height="200" rx="10" fill="#121214" stroke="#6366F1" stroke-width="2"/>
+  <text x="500" y="742" text-anchor="middle" fill="#818CF8" font-size="15" font-weight="bold">Firestore</text>
+  <text x="500" y="762" text-anchor="middle" fill="#9CA3AF" font-size="11">sessions · checkpoints</text>
+  <text x="500" y="780" text-anchor="middle" fill="#9CA3AF" font-size="11">corrections (human-readable)</text>
+  <text x="500" y="798" text-anchor="middle" fill="#9CA3AF" font-size="11">costs (per-call log)</text>
+  <text x="500" y="816" text-anchor="middle" fill="#9CA3AF" font-size="11">chunk text lookup</text>
+  <text x="500" y="845" text-anchor="middle" fill="#3ECF8E" font-size="11" font-weight="bold">→ enables crash recovery:</text>
+  <text x="500" y="862" text-anchor="middle" fill="#6B7280" font-size="10">resume from last completed step,</text>
+  <text x="500" y="878" text-anchor="middle" fill="#6B7280" font-size="10">never restart a session from zero</text>
+
+  <!-- Vector Search -->
+  <rect x="720" y="715" width="400" height="200" rx="10" fill="#121214" stroke="#6366F1" stroke-width="2"/>
+  <text x="920" y="742" text-anchor="middle" fill="#818CF8" font-size="15" font-weight="bold">Vertex AI Vector Search</text>
+  <text x="920" y="758" text-anchor="middle" fill="#6B7280" font-size="10">(Agent Platform)</text>
+  <text x="920" y="782" text-anchor="middle" fill="#9CA3AF" font-size="11">code_chunk vectors</text>
+  <text x="920" y="800" text-anchor="middle" fill="#9CA3AF" font-size="11">correction vectors</text>
+  <text x="920" y="818" text-anchor="middle" fill="#9CA3AF" font-size="11">filtered by repo_id namespace</text>
+  <text x="920" y="845" text-anchor="middle" fill="#3ECF8E" font-size="11" font-weight="bold">→ enables long-term memory:</text>
+  <text x="920" y="862" text-anchor="middle" fill="#6B7280" font-size="10">streaming upsert, near-real-time</text>
+  <text x="920" y="878" text-anchor="middle" fill="#6B7280" font-size="10">retrieval across sessions</text>
+
+  <!-- Footer -->
+  <text x="700" y="950" text-anchor="middle" fill="#4B5563" font-size="11">All services deployed on Cloud Run (asia-south1) · Gemini Flash/Pro via Google GenAI SDK</text>
+</svg>
