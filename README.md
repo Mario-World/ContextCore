@@ -1,4 +1,4 @@
-# ContextCore - AI Partner remembers your code
+# ContextCore - AI Coding Partner
 
 ContextCore is a persistent-memory AI coding partner that learns your codebase and remembers your team’s coding conventions—so you don’t have to repeat them.
  
