@@ -753,6 +753,22 @@ export default function WorkspacePage() {
                     <div className="space-y-3 text-white/95 leading-relaxed font-sans text-xs md:text-sm">
                       {renderAgentMessage(msg.text)}
                     </div>
+
+                    {/* Quick action bar */}
+                    <div className="flex justify-end pt-2 border-t border-border/30 mt-2 select-none">
+                      <button
+                        onClick={() => {
+                          setInputMessage("Actually, we use ");
+                          const textarea = document.querySelector("textarea");
+                          if (textarea) textarea.focus();
+                        }}
+                        className="text-[10px] font-mono text-muted hover:text-accent font-semibold px-2 py-0.5 border border-border rounded hover:bg-surface/50 transition-all cursor-pointer flex items-center gap-1"
+                        title="Teach ContextCore a new convention"
+                      >
+                        <Brain className="w-3 h-3 text-muted/60" />
+                        <span>Wrong?</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
               );

@@ -2,7 +2,105 @@
 
 ContextCore is a technical coding agent featuring long-term repository memory. By indexing source code files into semantic vector search spaces and recording team-specific corrections and architectural conventions into a persistent store (Firestore), ContextCore ensures that AI code generation adheres strictly to your codebase's established rules and patterns rather than generic standards.
 
-![ContextCore Architecture Diagram](./architecture-diagram.svg)
+## Architecture Diagram
+
+```mermaid
+graph TB
+  subgraph Client["DEVELOPER & FRONTEND (Next.js)"]
+    Dev["Developer / Team"]
+    subgraph UI["WORKSPACE UI"]
+      LeftSidebar["Left Sidebar Nav
+      - Workspace
+      - Memory Nodes
+      - Costs & Usage
+      - GitHub Integration
+      - Deployments"]
+      CenterPanel["Center Panel
+      - Chat Feed
+      - Code Blocks
+      - File Highlights
+      - Ingestion Inputs"]
+      RightSidebar["Right Sidebar (Inspector)
+      - Active Memory Nodes
+      - Session Costs
+      - Active Files"]
+    end
+  end
+
+  subgraph Backend["BACKEND (FastAPI)"]
+    direction TB
+    subgraph API["API Endpoints"]
+      ChatEP["/chat"]
+      IngestEP["/ingest"]
+      QueryEP["/query"]
+      MemoryEP["/memory"]
+      CostsEP["/costs"]
+      HealthEP["/health"]
+    end
+
+    subgraph Agents["Agents (Orchestrated by Coordinator)"]
+      MemoryAgent["Memory Agent
+      - Semantic retrieval
+      - Load team memory
+      - Detect corrections"]
+      Coordinator["Coordinator Agent
+      - Understand intent
+      - Route requests
+      - Track costs & tokens"]
+      Architect["Architect Agent
+      - Code generation
+      - Apply conventions
+      - Return response"]
+    end
+
+    subgraph Services["Services Layer"]
+      GeminiSvc["Gemini Service"]
+      VectorSvc["Vector Search Service"]
+      FirestoreSvc["Firestore Service"]
+      CostSvc["Cost Tracking Service"]
+      GitSvc["GitHub Service"]
+    end
+
+    subgraph Tools["Tools Layer"]
+      GitCloner["Git Cloner"]
+      FileLoader["File Loader"]
+      ASTParser["Code Parser (AST)"]
+      Chunker["Text Chunker"]
+      Embedder["Embedder"]
+    end
+  end
+
+  subgraph Cloud["GOOGLE CLOUD & SERVICES"]
+    Gemini["Gemini 3.5 Models"]
+    Vertex["Vertex AI Vector Search"]
+    Firestore["Cloud Firestore"]
+    GitHub["GitHub API"]
+  end
+
+  %% Relationships & Flows
+  Dev -- HTTPS --> UI
+  UI -- REST API / JSON --> API
+  API --> Coordinator
+  Coordinator --> MemoryAgent
+  Coordinator --> Architect
+  MemoryAgent -.-> Services
+  Architect -.-> Services
+  Services --> Tools
+  
+  GeminiSvc --> Gemini
+  VectorSvc --> Vertex
+  FirestoreSvc --> Firestore
+  GitSvc --> GitHub
+  
+  %% High level data flow
+  classDef clientStyle fill:#0f172a,stroke:#3b82f6,stroke-width:2px,color:#fff;
+  classDef backendStyle fill:#090d16,stroke:#10b981,stroke-width:2px,color:#fff;
+  classDef cloudStyle fill:#0f172a,stroke:#f97316,stroke-width:2px,color:#fff;
+  
+  class Client,UI,LeftSidebar,CenterPanel,RightSidebar,Dev clientStyle;
+  class Backend,API,Agents,MemoryAgent,Coordinator,Architect,Services,Tools,GeminiSvc,VectorSvc,FirestoreSvc,CostSvc,GitSvc,GitCloner,FileLoader,ASTParser,Chunker,Embedder backendStyle;
+  class Cloud,Gemini,Vertex,Firestore,GitHub cloudStyle;
+```
 
 ---
 
