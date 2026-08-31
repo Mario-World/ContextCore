@@ -1,19 +1,31 @@
-import time
-from typing import List, Optional
-from fastapi import FastAPI, HTTPException, Query as QueryParam
+import os
+import sys
+from typing import Dict, Any
+
+# Ensure both backend and workspace root are available on sys.path
+backend_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(backend_dir)
+for p in (project_root, backend_dir):
+    if p not in sys.path:
+        sys.path.insert(0, p)
+
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from backend.config import settings
-from backend.cloner import clone_repository
-from backend.chunker import chunk_file, CodeChunk
-from backend.embedder import embedder
-from backend.storage import storage, QueryResult
+try:
+    from backend.tools import github_tools, code_parser
+    from backend.agents import memory_agent, coordinator
+    from backend.services import firestore_service
+except ImportError:
+    from tools import github_tools, code_parser
+    from agents import memory_agent, coordinator
+    from services import firestore_service
 
 app = FastAPI(
-    title="ContextCore Ingestion & Vector Search API",
-    description="Clones repos, chunks AST/regex symbols, embeds via Gemini, and indexes into Vector Search & Firestore",
-    version="1.0.0"
+    title="ContextCore API",
+    description="Persistent-memory coding agent with Vector Search and Firestore",
+    version="2.0.0",
 )
 
 app.add_middleware(
@@ -24,141 +36,105 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 class IngestRequest(BaseModel):
-    repo_url: str = Field(..., description="Git clone URL (HTTPS/SSH) or local directory path")
-    repo_id: Optional[str] = Field(None, description="Unique identifier for repository (used as restrict tag)")
-    branch: Optional[str] = Field(None, description="Optional branch or tag to clone")
+    github_url: str = Field(..., description="GitHub repository URL to clone and ingest")
+    repo_id: str = Field(..., description="Unique repository identifier")
 
-class IngestFileSummary(BaseModel):
-    file_path: str
-    chunks_count: int
 
-class IngestResponse(BaseModel):
-    status: str
-    repo_id: str
-    files_processed: int
-    chunks_indexed: int
-    duration_seconds: float
-    files: List[IngestFileSummary]
+class ChatRequest(BaseModel):
+    session_id: str = Field(..., description="Session identifier")
+    repo_id: str = Field(..., description="Repository identifier")
+    message: str = Field(..., description="User prompt or instruction")
 
-class QueryRequest(BaseModel):
-    query: str = Field(..., description="Search query string, e.g. 'how do we handle auth'")
-    repo_id: Optional[str] = Field(None, description="Filter restrict to search only within a specific repo")
-    top_k: int = Field(5, ge=1, le=50, description="Number of results to return")
-
-class QueryResponse(BaseModel):
-    query: str
-    repo_id: Optional[str]
-    total_results: int
-    results: List[QueryResult]
-
-def derive_repo_id(repo_url: str) -> str:
-    cleaned = repo_url.rstrip("/").removesuffix(".git")
-    parts = cleaned.replace("\\", "/").split("/")
-    if len(parts) >= 2:
-        return f"{parts[-2]}/{parts[-1]}".lower()
-    return parts[-1].lower() if parts else "default-repo"
 
 @app.get("/health")
-def health_check():
-    return {
-        "status": "ok",
-        "gemini_api_configured": bool(settings.gemini_api_key),
-        "embedding_model": settings.embedding_model,
-        "indexed_chunks": len(storage._chunks),
-        "indexed_repos": list(set(storage._repo_map.values()))
-    }
-
-@app.post("/ingest", response_model=IngestResponse)
-def ingest_repository(req: IngestRequest):
-    """
-    Ingest pipeline:
-    1. Clone repo (GitPython)
-    2. Chunk code by function/class (AST for Python, regex for JS/TS)
-    3. Embed each chunk via Gemini embedding model
-    4. Upsert to Vector Search with repo_id restrict and store metadata + text in Firestore
-    """
-    start_time = time.time()
-    repo_id = req.repo_id or derive_repo_id(req.repo_url)
-
+def health_check() -> Dict[str, str]:
+    """Health check endpoint."""
     try:
-        with clone_repository(req.repo_url, branch=req.branch) as cloned:
-            code_files = cloned.get_code_files()
-            if not code_files:
-                raise HTTPException(status_code=400, detail="No valid code files found in repository")
-
-            all_chunks: List[CodeChunk] = []
-            files_summary: List[IngestFileSummary] = []
-
-            for file_path, content in code_files.items():
-                chunks = chunk_file(file_path, content)
-                if chunks:
-                    all_chunks.extend(chunks)
-                    files_summary.append(IngestFileSummary(
-                        file_path=file_path,
-                        chunks_count=len(chunks)
-                    ))
-
-            if not all_chunks:
-                raise HTTPException(status_code=400, detail="No code chunks could be extracted from repository")
-
-            # Generate Gemini embeddings for all chunks
-            embeddings = embedder.embed_chunks(all_chunks)
-
-            # Upsert into Vector Search & Firestore
-            indexed_count = storage.upsert_chunks_and_vectors(
-                repo_id=repo_id,
-                chunks=all_chunks,
-                embeddings=embeddings
-            )
-
-            duration = round(time.time() - start_time, 3)
-
-            return IngestResponse(
-                status="success",
-                repo_id=repo_id,
-                files_processed=len(code_files),
-                chunks_indexed=indexed_count,
-                duration_seconds=duration,
-                files=files_summary
-            )
-
-    except HTTPException:
-        raise
+        return {"status": "ok"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Ingestion failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/query", response_model=QueryResponse)
-def query_index(req: QueryRequest):
+
+@app.post("/ingest")
+def ingest_repo(req: IngestRequest) -> Dict[str, Any]:
     """
-    Raw query against the Vector Search index with repo_id restrict filtering.
+    Clones GitHub repository, chunks code files, embeds, and stores into Vector Search and Firestore.
     """
-    if not req.query.strip():
-        raise HTTPException(status_code=400, detail="Query string cannot be empty")
+    try:
+        repo_path = github_tools.clone_repo(req.github_url)
+        try:
+            code_files = github_tools.list_code_files(repo_path)
+            chunks_stored = 0
 
-    # Embed search query via Gemini embedding model
-    query_vector = embedder.embed_query(req.query)
+            for file_path in code_files:
+                try:
+                    with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                        content = f.read()
+                except Exception:
+                    continue
 
-    # Perform vector similarity search and retrieve Firestore chunks
-    results = storage.search_vectors(
-        query_vector=query_vector,
-        repo_id=req.repo_id,
-        top_k=req.top_k
-    )
+                rel_path = os.path.relpath(file_path, repo_path).replace("\\", "/")
+                chunks = code_parser.chunk_file(content, rel_path)
 
-    return QueryResponse(
-        query=req.query,
-        repo_id=req.repo_id,
-        total_results=len(results),
-        results=results
-    )
+                for chunk in chunks:
+                    memory_agent.store_code_chunk(
+                        text=chunk["text"],
+                        file_path=chunk["file_path"],
+                        repo_id=req.repo_id,
+                    )
+                    chunks_stored += 1
 
-@app.get("/query", response_model=QueryResponse)
-def query_index_get(
-    query: str = QueryParam(..., description="Search query string"),
-    repo_id: Optional[str] = QueryParam(None, description="Optional repo_id restrict filter"),
-    top_k: int = QueryParam(5, ge=1, le=50, description="Top K results")
-):
-    """GET query endpoint for convenient testing in browser or curl."""
-    req = QueryRequest(query=query, repo_id=repo_id, top_k=top_k)
-    return query_index(req)
+            return {
+                "status": "ok",
+                "files_processed": len(code_files),
+                "chunks_stored": chunks_stored,
+            }
+        finally:
+            github_tools.cleanup_repo(repo_path)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/chat")
+def chat(req: ChatRequest) -> Dict[str, Any]:
+    """
+    Processes chat messages with ContextCore coordinator, checking for prior checkpoints and handling memory retrieval.
+    """
+    try:
+        prior_checkpoint = coordinator.resume_if_crashed(req.session_id)
+        resumed_from_checkpoint = prior_checkpoint is not None
+
+        response = coordinator.handle_message(
+            session_id=req.session_id,
+            repo_id=req.repo_id,
+            user_message=req.message,
+        )
+        response["resumed_from_checkpoint"] = resumed_from_checkpoint
+        return response
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/memory/{repo_id}")
+def get_memory(repo_id: str) -> Dict[str, Any]:
+    """
+    Retrieves stored conventions and corrections for a specific repository.
+    """
+    try:
+        corrections = firestore_service.list_corrections(repo_id)
+        return {"corrections": corrections}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/costs")
+def get_costs() -> Dict[str, Any]:
+    """
+    Retrieves token and cost breakdown across Flash and Pro models.
+    """
+    try:
+        return firestore_service.get_cost_summary()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
