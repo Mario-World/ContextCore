@@ -1,16 +1,8 @@
-# ContextCore | Persistent Memory AI Coding Partner
+# ContextCore - AI Coding Partner
 
 ContextCore is a persistent-memory AI coding partner that learns your codebase and remembers your team’s coding conventions—so you don’t have to repeat them.
  
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-![ContextCore Architecture Diagram](./file:///D:/ChatGPT%20Image%20Aug%2031,%202026,%2007_55_23%20PM.svg)
-=======
-# Architecture Diagram
-<img width="1536" height="1024" alt="ChatGPT Image Aug 31, 2026, 07_55_23 PM" src="https://github.com/user-attachments/assets/a4704cb1-c465-499b-a55c-c906c41596f8" />
->>>>>>> b4d21d7fad477c5d79e313bdb654b3d7170f13ff
-=======
 ## The Problem
 
 Every LLM coding assistant today has the same failure mode: it's brilliant and
@@ -33,7 +25,10 @@ is what turns a coding assistant into a coding *partner*.
 - Engineering teams onboarding AI pair-programmers into large legacy codebases
 - Consultancies juggling many client repos, each with different conventions
 - Platform teams evaluating whether to build an in-house coding agent or buy one
->>>>>>> ba324e319bf206c0dd8dd139a3513ef99d0d4fd2
+
+# Architecture Diagram
+<img width="1536" height="1024" alt="ChatGPT Image Aug 31, 2026, 07_55_23 PM" src="https://github.com/user-attachments/assets/a4704cb1-c465-499b-a55c-c906c41596f8" />
+
 
 ---
 
@@ -53,7 +48,6 @@ is what turns a coding assistant into a coding *partner*.
 
 ---
 
-![ContextCore Architecture Diagram](./file:///D:/ChatGPT%20Image%20Aug%2031,%202026,%2007_55_23%20PM.svg)
 
 ---
 
@@ -71,28 +65,74 @@ is what turns a coding assistant into a coding *partner*.
 | **Visualization** | Recharts | Memory & cost visualization |
 
 
-
-
-### Orchestration (Agents)
-The backend acts as the brain, orchestrating three specialized agents:
-*   **Coordinator Agent:** The central "router." It understands intent, chooses between Gemini 3.5 Pro (complex tasks) and Flash (simple tasks) to optimize costs, and manages execution checkpoints.
-*   **Memory Agent:** Responsible for retrieving relevant code via vector search and detecting verbal corrections (e.g., *"We use functional components here"*) to update the permanent memory pool.
-*   **Architect Agent:** Focused on the heavy lifting—generating, refactoring, and structured code output that adheres to retrieved repository conventions.
-
-### Services & Infrastructure
-*   **Vector Search Service:** Uses Vertex AI to index code repositories semantically.
-*   **Firestore Service:** Persists "Memory Nodes" (team rules/corrections), session history, and metadata.
-*   **Cost Tracking Service:** Provides real-time visibility into token usage and model spend.
-*   **GitHub Service:** Handles repository cloning, file metadata, and webhook integration.
-
----
-
 ## 🚀 Key Features
 
 *   **Persistent Team Memory:** Automatically detects corrections in chat, classifies them (auth, styling, naming, etc.), and stores them in Cloud Firestore. These rules are injected into every future prompt.
 *   **Smart Model Routing:** Dynamically routes queries to **Gemini 3.5 Pro** for architectural changes or **Gemini 3.5 Flash** for lookups, significantly reducing API costs.
 *   **AST-Based Code Ingestion:** Uses an Abstract Syntax Tree (AST) parser and text chunker to ensure code is indexed with semantic meaning rather than just raw text.
 *   **Real-time Context Visibility:** The UI shows you exactly which "Memory Nodes" are being used to generate a response, providing transparency into the AI's "thought process."
+
+## Cost-aware routing
+
+Routing is a simple, explainable, hardcoded rule — not a learned classifier:
+
+Flash: explain / summarize / retrieve / general questions
+Pro: generate / refactor / architect / implement / build / design
+
+Every call is logged to Firestore with an estimated token count and cost, surfaced live in the Session Usage panel.
+
+
+## Reliability model
+
+Before every step of the coordinator loop (memory retrieval, model selection,
+generation), state is checkpointed to Firestore keyed by `session_id + step`.
+On the next request for that session, the backend checks for an incomplete
+prior checkpoint and can resume rather than restart from zero — this is what
+"self-healing" means in practice here: not automatic error correction, but
+never losing already-completed work when a process dies.
+
+---
+
+## Setup
+
+### 1. GCP project
+- Enable APIs: Vertex AI / Agent Platform, Cloud Firestore, Cloud Run
+- Create a Firestore database (Native mode), region `asia-south1`
+- Create a Vertex AI Vector Search index (768 dims, Streaming update method),
+  create an Index Endpoint (Public), deploy the index to it
+- Auth locally with `gcloud auth application-default login` — no service
+  account JSON key needed (and typically blocked by org policy on new
+  projects anyway)
+
+### 2. Backend
+```bash
+cd backend
+pip install -r requirements.txt
+cp .env.example .env   # fill in project ID, region, index/endpoint IDs, Gemini API key, GitHub PAT
+uvicorn main:app --reload --port 8000
+```
+
+### 3. Frontend
+```bash
+cd frontend
+npm install
+echo "NEXT_PUBLIC_API_URL=http://localhost:8000" > .env.local
+npm run dev
+```
+
+### 4. Deploy
+```bash
+gcloud run deploy contextcore-backend --source ./backend --region asia-south1 --allow-unauthenticated
+gcloud run deploy contextcore-frontend --source ./frontend --region asia-south1 --allow-unauthenticated
+```
+
+---
+
+
+
+
+---
+
 
 ---
 
@@ -112,13 +152,6 @@ ContextCore/
 │   ├── components/           # Recharts dashboards and Chat UI
 │   ├── tailwind.config.ts    # Design system and theme
 │   └── package.json          # Node dependencies
-```
-
----
-
-## 🛠 Installation & Setup
-
-
 ```
 
 ---
